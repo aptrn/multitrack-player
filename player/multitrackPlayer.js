@@ -339,6 +339,8 @@ class multitrackPlayer extends HTMLElement{
             self.routes[i] = self.audioContext.createGain();
             self.routes[i].channelCount = 1;
             self.routes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
+        }
+        for(var i = 0; i < buffer.numberOfChannels; i++){
             console.log("connecting ch: " + i + " to " + self.configuration[i]);
             if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
             else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
@@ -346,7 +348,7 @@ class multitrackPlayer extends HTMLElement{
             else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
             else if(self.configuration[i] === 'C'){
                 self.muteSplitter.connect(self.routes[0], i);
-                self.muteSplitter.connect(self.routes[1], i);
+                //self.muteSplitter.connect(self.routes[1], i);
             }
             else if(self.configuration[i] === 'S'){
                 //subwoofer?
