@@ -22,6 +22,26 @@ div{
     padding-left: 16px;     /* make text start to the right of the image */
     vertical-align: middle; /* align the text vertically centered */
 
+
+}
+
+#playbutton {
+        width: 0; 
+        height: 0; 
+        border-top: 40px solid transparent;
+        border-bottom: 40px solid transparent;
+        
+        border-left: 60px solid black;
+}
+#stopbutton {
+    
+    border-top: 20px solid transparent;
+    border-bottom: 20px solid transparent;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    width: 30px;
+    height: 30px;
+    background: black;
 }
 
 #wave{
