@@ -122,10 +122,6 @@ class multitrackPlayer extends HTMLElement{
         console.log(this.configuration);
         multitrackPlayer.loadAudio(this.getAttribute('file'))
         .then(function(e){ self.loaded(e), function(e){ console.log("mhmmm")}});
-        
-
-       
-        //console.log("constructor: " + this.id);
     }
 
     connectedCallback(){
@@ -146,7 +142,6 @@ class multitrackPlayer extends HTMLElement{
 
     updateChannels(){
         this.source.channelCount = this.audioContext.destination.channelCount;
-
         this.gain.channelCount = this.audioContext.destination.channelCount;
         this.lp.channelCount = this.audioContext.destination.channelCount;
         this.compressor = new Array(this.audioContext.destination.channelCount);
@@ -155,8 +150,6 @@ class multitrackPlayer extends HTMLElement{
             this.compressor[i].channelCountMode = "explicit";
             this.compressor[i].channelCount = 1;
         }
-
-
     }
 
     createAudioNodes(){
@@ -254,7 +247,6 @@ class multitrackPlayer extends HTMLElement{
         }
         
         if(this._authorized === 'true'){
-            
             //this.outSplitter = this.audioContext.createChannelSplitter(this.configuration.length);
             //this.outMerger = this.audioContext.createChannelMerger(this.configuration.length);
             this.gain.connect(this.audioContext.destination);
@@ -288,9 +280,9 @@ class multitrackPlayer extends HTMLElement{
         console.log("Detected active channels: " + this.audioContext.destination.channelCount + " / " + this.audioContext.destination.maxChannelCount);
         console.log("buffer: " + this.source.buffer.numberOfChannels);
         console.log("source: " + this.source.channelCount);
-        console.log("splitter: " + this.splitter.channelCount);
+        console.log("muteSplitter: " + this.muteSplitter.channelCount);
         console.log("mutes: " + this.mutes[0].channelCount);
-        console.log("merger: " + this.merger.channelCount);
+        console.log("merger: " + this.routesMerger.channelCount);
         console.log("lp: " + this.lp.channelCount);
         console.log("eq: " + this.eq[0].channelCount);
         console.log("compressor: " + this.compressor[0].channelCount);
@@ -312,39 +304,25 @@ class multitrackPlayer extends HTMLElement{
         self.source.loop = self.loop;
         self.source.loopStart = self.calculateTime(self.startPoint);
         self.source.loopEnd = self.calculateTime(self.endPoint);
-        self.source.connect(self.splitter);
-        //self.source.connect(self.audioContext.destination);
+        self.source.connect(self.muteSplitter);
     }
 
     createMutes(buffer){
         var self = this;
-        self.splitter = self.audioContext.createChannelSplitter(buffer.numberOfChannels);
-        self.source.connect(self.splitter);
-        self.merger = self.audioContext.createChannelMerger(buffer.numberOfChannels);
+        self.muteSplitter = self.audioContext.createChannelSplitter(buffer.numberOfChannels);
+        self.muteMerger = self.audioContext.createChannelMerger(buffer.numberOfChannels);
+        self.source.connect(self.muteSplitter);
+        
         self.mutes = new Array(buffer.numberOfChannels);
         self.elementMutes = self.shadow.getElementById('mutes');
         for(var i = 0; i < buffer.numberOfChannels; i++){
             self.mutes[i] = self.audioContext.createGain();
             self.mutes[i].channelCount = 1;
             self.mutes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
-        }
-        for(var i = 0; i < buffer.numberOfChannels; i++){
-
-            console.log("connecting ch: " + i + " to " + self.configuration[i]);
-            //self.splitter.connect(self.mutes[i], i, 0);
-            if(self.configuration[i] === 'L') self.splitter.connect(self.mutes[0], i);
-            else if(self.configuration[i] === 'R') self.splitter.connect(self.mutes[1], i);
-            else if(self.configuration[i] === 'B') self.splitter.connect(self.mutes[2], i);
-            else if(self.configuration[i] === 'D') self.splitter.connect(self.mutes[3], i);
-            else if(self.configuration[i] === 'C'){
-                self.splitter.connect(self.mutes[0], i);
-                self.splitter.connect(self.mutes[1], i);
-            }
-
-                       
-            self.mutes[i].connect(self.merger, 0, i);
+            self.muteSplitter.connect(self.mutes[i], i);
+            self.mutes[i].connect(self.muteMerger, 0, i);
             var nMute = document.createElement("input");
-            nMute.innerText = String(i);
+            nMute.innerText = self.configuration[i];
             nMute.number = i;
             nMute.type = "checkbox";
             self.elementMutes.appendChild(nMute);
@@ -353,9 +331,29 @@ class multitrackPlayer extends HTMLElement{
                 self.mutes[this.number].gain.setValueAtTime(this.checked ? 0 : 1, self.audioContext.currentTime);
             });
         }
-        //console.log(self.mutes[2].channelCount);
-        //console.log(self.splitter.channelCount);
-        self.merger.connect(self.lp);
+        self.routeSplitter = self.audioContext.createChannelSplitter(buffer.numberOfChannels);
+        self.routesMerger = self.audioContext.createChannelMerger(buffer.numberOfChannels);
+        self.muteMerger.connect(self.routeSplitter);
+        self.routes = new Array(buffer.numberOfChannels);
+        for(var i = 0; i < buffer.numberOfChannels; i++){
+            self.routes[i] = self.audioContext.createGain();
+            self.routes[i].channelCount = 1;
+            self.routes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
+            console.log("connecting ch: " + i + " to " + self.configuration[i]);
+            if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
+            else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
+            else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2], i);
+            else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
+            else if(self.configuration[i] === 'C'){
+                self.muteSplitter.connect(self.routes[0], i);
+                self.muteSplitter.connect(self.routes[1], i);
+            }
+            else if(self.configuration[i] === 'S'){
+                //subwoofer?
+            }                       
+            self.routes[i].connect(self.routesMerger, 0, i);
+        }
+        self.routesMerger.connect(self.lp);
     }
 
     createEq(){
@@ -369,13 +367,10 @@ class multitrackPlayer extends HTMLElement{
         }
         var elementEq = this.shadow.getElementById('equalizerDiv');
         for(var i = 0; i < this.eq.length; i++){
-    
             var label = document.createElement("p");
             label.id = "eq_label_" + i;
             label.innerHTML = eqFreq[i] + "Hz";
             elementEq.appendChild(label);
-    
-    
             var nEq = document.createElement("input");
             nEq.number = i;
             nEq.id = "eq_" + i;
@@ -386,8 +381,6 @@ class multitrackPlayer extends HTMLElement{
             nEq.value = 0;
             nEq.step = 0.001;
             elementEq.appendChild(nEq);
-            
-            
             nEq.addEventListener('change', function() {
                 self.eq[this.number].gain.setValueAtTime(this.value, self.audioContext.currentTime);
             });
