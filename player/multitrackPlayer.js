@@ -331,7 +331,7 @@ class multitrackPlayer extends HTMLElement{
             nMute.type = "checkbox";
             self.elementMutes.appendChild(nMute);
             nMute.addEventListener('click', function(){
-                //console.log("mute " + this.number + " = " + this.checked); 
+                console.log("mute " + this.number + " = " + this.checked); 
                 self.mutes[this.number].gain.setValueAtTime(this.checked ? 0 : 1, self.audioContext.currentTime);
             });
         }
@@ -350,13 +350,17 @@ class multitrackPlayer extends HTMLElement{
             else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
             else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2], i);
             else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
-            else if(self.configuration[i] === 'C'){
-                self.muteSplitter.connect(self.routes[0], i);
-                self.muteSplitter.connect(self.routes[1], i);
+            else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
+                self.routeSplitter.connect(self.routes[0], i);
+                self.routeSplitter.connect(self.routes[1], i);
             }
             else if(self.configuration[i] === 'S'){
-                //subwoofer?
-            }                       
+                self.phaseInversion = self.audioContext.createGain();
+                self.phaseInversion.gain.setValueAtTime(-1, self.audioContext.currentTime);
+                self.routeSplitter.connect(self.phaseInversion, i);
+                self.phaseInversion.connect(self.routes[0], 0);
+                self.routeSplitter.connect(self.routes[1], i);
+            }                    
             self.routes[i].connect(self.routesMerger, 0, i);                                    //connect each dummy gain node to merger
         }
         self.routesMerger.connect(self.lp);                                                     //connect sorted multichannel to lowpass filter
