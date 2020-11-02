@@ -2,6 +2,7 @@ const template = document.createElement('template');
 template.innerHTML = 
 `
 <div class="whole">
+    
     <link href="/player/style.css" rel="stylesheet" type="text/css">  
     <div id="player">
         <div id="main">
@@ -53,6 +54,7 @@ template.innerHTML =
 </div>
 `
 
+
 var eqFreq = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
 
 class multitrackPlayer extends HTMLElement{
@@ -60,7 +62,6 @@ class multitrackPlayer extends HTMLElement{
         super();
         this._authorized = this.getAttribute('auth');
         console.log("Auth: " + this._authorized);
-
         //Add template html
         this.attachShadow({ mode: 'open'});
         this.shadowRoot.appendChild(template.content.cloneNode(true));
@@ -102,13 +103,18 @@ class multitrackPlayer extends HTMLElement{
         this.point1 = 0;
         this.point2 = this.canvasWidth;
 
-
         //Create initial audio nodes chain
         this.createAudioNodes();
         
         //Load channel configuration from "layout" attribute
         var layout = this.getAttribute('layout');
-        this.configuration = layout.split('');
+        if(layout === "AMBI"){
+            console.log("Ambisonics");
+            this.configuration = "AMBI";
+        }
+        else{
+            this.configuration = layout.split('');
+        }
 
 
         //Load audio from "file" attribute and call "loaded" function if everything is fine
@@ -344,26 +350,43 @@ class multitrackPlayer extends HTMLElement{
             self.routes[i].channelCount = 1;
             self.routes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
         }
-        for(var i = 0; i < buffer.numberOfChannels; i++){                                       //connect each splitted channel to selected dummy gain node
-            console.log("connecting ch: " + i + " to " + self.configuration[i]);
-            if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
-            else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
-            else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2], i);
-            else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
-            else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
-                self.routeSplitter.connect(self.routes[0], i);
-                self.routeSplitter.connect(self.routes[1], i);
+
+            for(var i = 0; i < buffer.numberOfChannels; i++){                                       //connect each splitted channel to selected dummy gain node
+                if(self.configuration != "AMBI"){
+                    console.log("connecting ch: " + i + " to " + self.configuration[i]);
+                    if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
+                    else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
+                    else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2], i);
+                    else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
+                    else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
+                        self.routeSplitter.connect(self.routes[0], i);
+                        self.routeSplitter.connect(self.routes[1], i);
+                    }
+                    else if(self.configuration[i] === 'S'){
+                        self.phaseInversion = self.audioContext.createGain();
+                        self.phaseInversion.gain.setValueAtTime(-1, self.audioContext.currentTime);
+                        self.routeSplitter.connect(self.phaseInversion, i);
+                        self.phaseInversion.connect(self.routes[0], 0);
+                        self.routeSplitter.connect(self.routes[1], i);
+                    }                    
+                }
+                else{
+                    self.vmic = [];
+                    var order = 1;     
+                    self.vmic[i] = new ambisonics.virtualMic(self.audioContext, order);
+                    self.muteMerger.connect(self.vmic[i].in);
+                    self.vmic[i].out.connect(self.routes[i % 2], 0);
+                    
+                    self.vmic[i].azim = i * 45;
+                    self.vmic[i].updateOrientation();
+                    self.routes[i].connect(self.routesMerger, 0, i);                                    //connect each dummy gain node to merger
+                    self.routesMerger.connect(self.lp);    
+                }
+                self.routes[i].connect(self.routesMerger, 0, i);                                    //connect each dummy gain node to merger
             }
-            else if(self.configuration[i] === 'S'){
-                self.phaseInversion = self.audioContext.createGain();
-                self.phaseInversion.gain.setValueAtTime(-1, self.audioContext.currentTime);
-                self.routeSplitter.connect(self.phaseInversion, i);
-                self.phaseInversion.connect(self.routes[0], 0);
-                self.routeSplitter.connect(self.routes[1], i);
-            }                    
-            self.routes[i].connect(self.routesMerger, 0, i);                                    //connect each dummy gain node to merger
-        }
         self.routesMerger.connect(self.lp);                                                     //connect sorted multichannel to lowpass filter
+ 
+
     }
     
     analyzeData(buff) {             //da capire, ridurre i samples per visualizzare meglio, per ora bypass
