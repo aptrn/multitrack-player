@@ -1,9 +1,12 @@
 const template = document.createElement('template');
+//analizzatore di spettro
 template.innerHTML = 
 `
 <div class="whole">
+    
     <link href="/player/style.css" rel="stylesheet" type="text/css">  
     <div id="player">
+    <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">
         <div id="main">
             <div id="transport">
                 <button id="play"><div id="playbutton"/></button>
@@ -53,14 +56,14 @@ template.innerHTML =
 </div>
 `
 
+
 var eqFreq = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
 
 class multitrackPlayer extends HTMLElement{
     constructor(){
         super();
         this._authorized = this.getAttribute('auth');
-        console.log("Auth: " + this._authorized);
-
+        //console.log("Auth: " + this._authorized);
         //Add template html
         this.attachShadow({ mode: 'open'});
         this.shadowRoot.appendChild(template.content.cloneNode(true));
@@ -102,15 +105,16 @@ class multitrackPlayer extends HTMLElement{
         this.point1 = 0;
         this.point2 = this.canvasWidth;
 
-
         //Create initial audio nodes chain
         this.createAudioNodes();
         
+
+        //Load file encoding configuration from "encoding" attribute
+        this.encoding = this.getAttribute('encoding');
         //Load channel configuration from "layout" attribute
         var layout = this.getAttribute('layout');
         this.configuration = layout.split('');
-
-
+        console.log(this.configuration);
         //Load audio from "file" attribute and call "loaded" function if everything is fine
         multitrackPlayer.loadAudio(this.getAttribute('file'))
         .then(function(e){ self.loaded(e), function(e){ console.log("mhmmm")}});
@@ -276,7 +280,7 @@ class multitrackPlayer extends HTMLElement{
         console.log("source: " + this.source.channelCount);
         console.log("muteSplitter: " + this.muteSplitter.channelCount);
         console.log("mutes: " + this.mutes[0].channelCount);
-        console.log("merger: " + this.routesMerger.channelCount);
+        //console.log("merger: " + this.routesMerger.channelCount);
         console.log("lp: " + this.lp.channelCount);
         console.log("eq: " + this.eq[0].channelCount);
         console.log("compressor: " + this.compressor[0].channelCount);
@@ -331,40 +335,74 @@ class multitrackPlayer extends HTMLElement{
             nMute.type = "checkbox";
             self.elementMutes.appendChild(nMute);
             nMute.addEventListener('click', function(){
-                console.log("mute " + this.number + " = " + this.checked); 
+                //console.log("mute " + this.number + " = " + this.checked); 
                 self.mutes[this.number].gain.setValueAtTime(this.checked ? 0 : 1, self.audioContext.currentTime);
             });
         }
-        self.routeSplitter = self.audioContext.createChannelSplitter(buffer.numberOfChannels); //splitter to divide channels from post muting to rearrange channels accoring to configuration
-        self.routesMerger = self.audioContext.createChannelMerger(buffer.numberOfChannels);    //merger post routing
-        self.muteMerger.connect(self.routeSplitter);
-        self.routes = new Array(buffer.numberOfChannels);
-        for(var i = 0; i < buffer.numberOfChannels; i++){                                       //create dummy gain node for each channel in buffer
-            self.routes[i] = self.audioContext.createGain();
-            self.routes[i].channelCount = 1;
-            self.routes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
+        if(self.encoding === "B-Format"){
+            self.binDecoder = new ambisonics.binDecoder(self.audioContext, parseInt(self.configuration[0]));                 //create B-Format to binaural decoder
+            self.sceneRotator = new ambisonics.sceneRotator(self.audioContext, parseInt(self.configuration[0]));
+            //self.sceneRotator.yaw = 0;
+            //self.sceneRotator.updateRotMtx();
+            self.muteMerger.connect(self.sceneRotator.in);                                           //connect merger to scene rotator
+            self.sceneRotator.out.connect(self.binDecoder.in);                                                  //connect scene rotator to lowpass filter
+            self.binDecoder.out.connect(self.lp)
+            
         }
-        for(var i = 0; i < buffer.numberOfChannels; i++){                                       //connect each splitted channel to selected dummy gain node
-            console.log("connecting ch: " + i + " to " + self.configuration[i]);
-            if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
-            else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
-            else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2], i);
-            else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
-            else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
-                self.routeSplitter.connect(self.routes[0], i);
-                self.routeSplitter.connect(self.routes[1], i);
+        else{      
+            self.routeSplitter = self.audioContext.createChannelSplitter(buffer.numberOfChannels); //splitter to divide channels from post muting to rearrange channels accoring to configuration
+            self.routesMerger = self.audioContext.createChannelMerger(buffer.numberOfChannels);    //merger post routing
+            self.muteMerger.connect(self.routeSplitter);
+            self.routes = new Array(buffer.numberOfChannels);
+            for(var i = 0; i < buffer.numberOfChannels; i++){                                      //create dummy gain node for each channel in buffer
+                self.routes[i] = self.audioContext.createGain();
+                self.routes[i].channelCount = 1;
+                self.routes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
+                self.routeSplitter.connect(self.routes[i], i, 0);
             }
-            else if(self.configuration[i] === 'S'){
-                self.phaseInversion = self.audioContext.createGain();
-                self.phaseInversion.gain.setValueAtTime(-1, self.audioContext.currentTime);
-                self.routeSplitter.connect(self.phaseInversion, i);
-                self.phaseInversion.connect(self.routes[0], 0);
-                self.routeSplitter.connect(self.routes[1], i);
-            }                    
-            self.routes[i].connect(self.routesMerger, 0, i);                                    //connect each dummy gain node to merger
+            if (self.encoding === "MS"){
+                for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
+                    if(self.configuration[i] === 'M'){
+                        
+                        self.routeSplitter.connect(self.routes[0], i);
+                        self.routeSplitter.connect(self.routes[1], i);
+                    }
+                    else if(self.configuration[i] === 'S'){
+                        
+                        self.nonPhaseInversion = self.audioContext.createGain();                    //create dummy gain with gain = 1
+                        self.nonPhaseInversion.gain.setValueAtTime(1, self.audioContext.currentTime);
+                        self.routeSplitter.connect(self.nonPhaseInversion, i);
+                        self.nonPhaseInversion.connect(self.routes[0]);                         //attach to left
+                        
+                        self.phaseInversion = self.audioContext.createGain();                       //create dummy gain for phase inversion with gain = -1
+                        self.phaseInversion.gain.setValueAtTime(-1, self.audioContext.currentTime);
+                        self.routeSplitter.connect(self.phaseInversion, i);
+                        self.phaseInversion.connect(self.routes[1]);                            //attach to right
+                    }   
+                    self.routes[i].connect(self.routesMerger, 0, i);                               //connect each dummy gain node to merger
+                }
+            }
+            else{
+                for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
+                    console.log("connecting ch: " + i + " to " + self.configuration[i]);
+                    if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
+                    else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
+                    else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2], i);
+                    else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
+                    else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
+                        self.routeSplitter.connect(self.routes[0], i);
+                        self.routeSplitter.connect(self.routes[1], i);
+                    }
+                    else if(self.configuration[i] === 'S'){
+                        //subwoofer?
+                    }                    
+                    self.routes[i].connect(self.routesMerger, 0, i);                                    //connect each dummy gain node to merger
+                }
+            }
+            self.routesMerger.connect(self.lp);                                                     //connect sorted multichannel to lowpass filter
         }
-        self.routesMerger.connect(self.lp);                                                     //connect sorted multichannel to lowpass filter
     }
+    
     
     analyzeData(buff) {             //da capire, ridurre i samples per visualizzare meglio, per ora bypass
         return buff;
@@ -554,7 +592,6 @@ class multitrackPlayer extends HTMLElement{
     //Callbacks for buttons
     addCallbacks(){
         var self = this;
-
         this.shadowRoot.getElementById('filter').addEventListener('click', function(e){
             self.openTab(e, this.id);
         });
@@ -588,6 +625,22 @@ class multitrackPlayer extends HTMLElement{
             label.innerHTML = self.source.loopEnd + " sec";
         });
         */
+       this.shadowRoot.getElementById('rotation').addEventListener('change', function() {
+            if(self.encoding === "B-Format"){
+                this.newRot = multitrackPlayer.map_range(this.value, 0, 1, 0, 360);
+                self.sceneRotator.yaw = this.newRot;
+                self.sceneRotator.updateRotMtx();
+            }
+            else if (self.encoding === "MS"){
+                this.newWidth = multitrackPlayer.map_range(this.value, 0, 1, -1, 1);
+                self.nonPhaseInversion.gain.setValueAtTime(this.newWidth, self.audioContext.currentTime);
+                self.phaseInversion.gain.setValueAtTime(-this.newWidth, self.audioContext.currentTime);
+            }
+            else{
+
+            }
+            console.log(this.value);
+        });
         this.shadowRoot.getElementById('volumeSlider').addEventListener('change', function() {
             self.gain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
             var label = self.shadow.getElementById("volume-value");
