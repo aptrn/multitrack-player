@@ -57,3 +57,8 @@ div{
 #wave > input {
     position: relative;
 }
+
+#spectrum {
+    position: absolute;
+    top: 460px;
+}

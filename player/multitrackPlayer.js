@@ -50,7 +50,11 @@ template.innerHTML =
                 <input id="release" type="range" min="0" max="50" value="10" step="0.01">
             </div>
         </div>
+        <div>
         <div id="wave">
+        </div>
+        <div id="spectrum">
+        </div>
         </div>
     </div>
 </div>
@@ -94,6 +98,7 @@ class multitrackPlayer extends HTMLElement{
 
         //Initialize variables 
         var self = this;
+        this.channels = this.audioContext.destination.maxChannelCount;
         this.lastTime = 0;
         this.source = null;
         this.currentBuffer = null;
@@ -146,6 +151,11 @@ class multitrackPlayer extends HTMLElement{
             this.compressor[i].channelCountMode = "explicit";
             this.compressor[i].channelCount = 1;
         }
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 256;
+        this.analyserbufferLength = this.analyser.frequencyBinCount;
+        this.analyserDataArray = new Uint8Array(this.analyserbufferLength);
+        
     };
     
     createEq(){
@@ -230,6 +240,7 @@ class multitrackPlayer extends HTMLElement{
         //Create two canvas
         this.createCanvas(0, this.canvasWidth, this.canvasHeight); //waveform
         this.createCanvas(1, this.canvasWidth, this.canvasHeight); //playehead
+        this.createCanvas(2, this.canvasWidth, this.canvasHeight); //spectrum
     
         //Calculate starting points and duration
         this.activeBufferDuration = this.currentBuffer.duration;
@@ -265,11 +276,13 @@ class multitrackPlayer extends HTMLElement{
         
         if(this._authorized === 'true'){        //If the user is authorized connect multichannel out
             this.gain.connect(this.audioContext.destination);
+            this.gain.connect(this.analyser);
         } 
         else{                                   //If the user is not authorized merge to mono and connect to speakers
             this.monoMerge = this.audioContext.createChannelMerger(1);
             this.gain.connect(this.monoMerge);
             this.monoMerge.connect(this.audioContext.destination, 0, 0);
+            this.monoMerge.connect(this.analyser);
         }
 
         this.addCallbacks();    //Adds UI callbacks
@@ -291,11 +304,22 @@ class multitrackPlayer extends HTMLElement{
     
     createCanvas (number,  w, h ) {     //Create canvas element
         var newCanvas = document.createElement('canvas');
-        newCanvas.id = "waveform_" + number;
         newCanvas.width  = w;
         newCanvas.height = h;
-        var wave = this.shadow.getElementById('wave');
-        wave.appendChild(newCanvas);
+        if (number == 2){
+            newCanvas.width  = w;
+            newCanvas.height = h / 8;
+            newCanvas.id = "spectrum";
+            var spectrum = this.shadow.getElementById('spectrum');
+            spectrum.appendChild(newCanvas);
+        } 
+        else {
+            newCanvas.width  = w;
+            newCanvas.height = h;
+            newCanvas.id = "waveform_" + number;
+            var wave = this.shadow.getElementById('wave');
+            wave.appendChild(newCanvas);
+        }
         this.context[number] = newCanvas.getContext('2d');
     }
   
@@ -351,21 +375,20 @@ class multitrackPlayer extends HTMLElement{
         }
         else{      
             self.routeSplitter = self.audioContext.createChannelSplitter(buffer.numberOfChannels); //splitter to divide channels from post muting to rearrange channels accoring to configuration
-            self.routesMerger = self.audioContext.createChannelMerger(buffer.numberOfChannels);    //merger post routing
+            self.routesMerger = self.audioContext.createChannelMerger(self.channels);    //merger post routing
             self.muteMerger.connect(self.routeSplitter);
-            self.routes = new Array(buffer.numberOfChannels);
-            for(var i = 0; i < buffer.numberOfChannels; i++){                                      //create dummy gain node for each channel in buffer
+            self.routes = new Array(self.channels);
+            for(var i = 0; i < self.routes.length; i++){                                      //create dummy gain node for each channel in buffer
                 self.routes[i] = self.audioContext.createGain();
                 self.routes[i].channelCount = 1;
                 self.routes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
-                self.routeSplitter.connect(self.routes[i], i, 0);
             }
             if (self.encoding === "MS"){
                 for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
                     if(self.configuration[i] === 'M'){
                         
                         self.routeSplitter.connect(self.routes[0], i);
-                        self.routeSplitter.connect(self.routes[1], i);
+                        if(self.channels > 1) self.routeSplitter.connect(self.routes[1], i);
                     }
                     else if(self.configuration[i] === 'S'){
                         
@@ -377,27 +400,28 @@ class multitrackPlayer extends HTMLElement{
                         self.phaseInversion = self.audioContext.createGain();                       //create dummy gain for phase inversion with gain = -1
                         self.phaseInversion.gain.setValueAtTime(-1, self.audioContext.currentTime);
                         self.routeSplitter.connect(self.phaseInversion, i);
-                        self.phaseInversion.connect(self.routes[1]);                            //attach to right
+                        self.phaseInversion.connect(self.routes[1 % self.channels]);                            //attach to right
                     }   
-                    self.routes[i].connect(self.routesMerger, 0, i);                               //connect each dummy gain node to merger
-                }
+                 }
             }
             else{
                 for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
                     console.log("connecting ch: " + i + " to " + self.configuration[i]);
                     if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
-                    else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1], i);
-                    else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2], i);
-                    else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3], i);
+                    else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1 % self.channels], i);
+                    else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2 % self.channels], i);
+                    else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3 % self.channels], i);
                     else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
                         self.routeSplitter.connect(self.routes[0], i);
-                        self.routeSplitter.connect(self.routes[1], i);
+                        self.routeSplitter.connect(self.routes[1 % self.channels], i);
                     }
                     else if(self.configuration[i] === 'S'){
                         //subwoofer?
                     }                    
-                    self.routes[i].connect(self.routesMerger, 0, i);                                    //connect each dummy gain node to merger
                 }
+            }
+            for(var i = 0; i < self.channels; i++){
+                self.routes[i].connect(self.routesMerger, 0, i);                               //connect each dummy gain node to merger
             }
             self.routesMerger.connect(self.lp);                                                     //connect sorted multichannel to lowpass filter
         }
@@ -507,6 +531,26 @@ class multitrackPlayer extends HTMLElement{
             this.context[1].stroke();
         }
         this.context[1].restore();
+
+
+        //FREQ ANALYSER
+        this.freqHeight = this.canvasHeight / 8;
+        this.context[2].clearRect(0,0, this.canvasWidth, this.freqHeight);
+
+        this.context[2].fillStyle = 'rgb(0, 0, 0)';
+        this.context[2].fillRect(0, 0, this.canvasWidth, this.freqHeight);
+        
+        var barWidth = (this.canvasWidth / this.analyserbufferLength) * 2.5;
+        var barHeight; 
+        var x = 0;
+        this.analyser.getByteFrequencyData(this.analyserDataArray);
+        for(var i = 0; i < this.analyserbufferLength; i++) {
+            barHeight = this.analyserDataArray[i]/2;
+    
+            this.context[2].fillStyle = 'rgb(' + (barHeight + 100) + ',' + Math.random() * 50 + ', 50)';
+            this.context[2].fillRect(x, this.freqHeight - barHeight / 2, barWidth, barHeight);
+            x += barWidth + 1;
+        }
         window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(this));
     };
 
