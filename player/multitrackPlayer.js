@@ -9,17 +9,19 @@ template.innerHTML =
     <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">
         <div id="main">
             <div id="transport">
+                <button id="backward"><div id="backwardbutton"/>BACKWARD</button>
                 <button id="play"><div id="playbutton"/></button>
+                <button id="pause"><div id="pausebutton"/></button>
                 <button id="stop"><div id="stopbutton"/></button>  
-                
+                <button id="forward"><div id="forwardbutton"/>FORWARD</button>
                 <input id="loop" type="checkbox">loop</input>
             </div>
             <div id="mutes">
             </div>
 
             <div id="volumeDiv">
-                <h2>out volume</h2><p id="volume-value">0 gain</p>
-                <input id="volumeSlider" type="range" min="0" max="1" value="1" step="0.0001">
+                <h2>out volume</h2><p id="volume-value">0dB gain</p>
+                <input id="volumeSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">
             </div>
         </div>
         <div id="parameters">
@@ -27,27 +29,16 @@ template.innerHTML =
    
             <button class="tablinks" id="filter">filter</button>
             <button class="tablinks" id="equalizer">equalizer</button>
-            <button class="tablinks" id="compressor">compressor</button>
 
             <div class="tabcontent" id="filterDiv">
                 <p>lp</p><p id="lp-value">20000Hz</p>
-                <input id="lp" type="range" min="20" max="20000" value="19999" step="1">
+                <input id="lp" type="range" min="15000" max="20000" value="19999" step="1">
                 <p>hp</p><p id="hp-value">20Hz</p>
-                <input id="hp" type="range" min="20" max="20000" value="20" step="1">
+                <input id="hp" type="range" min="20" max="300" value="20" step="1">
             </div>
             <div class="tabcontent" id="equalizerDiv">
                 <div id="equalizerDiv">
                 </div>
-            </div>
-            <div class="tabcontent" id="compressorDiv">
-                <p>threshold</p><p id="threshold-value">0dB</p>
-                <input id="threshold" type="range" min="-90" max="0" value="0" step="0.01">
-                <p>ratio</p> <p id="ratio-value">1 : 1</p>
-                <input id="ratio" type="range" min="1" max="48" value="1" step="0.01">
-                <p>attack</p><p id="attack-value">10ms</p>
-                <input id="attack" type="range" min="0" max="50" value="10" step="0.01">
-                <p>release</p><p id="release-value">10ms</p>
-                <input id="release" type="range" min="0" max="50" value="10" step="0.01">
             </div>
         </div>
         <div>
@@ -59,6 +50,22 @@ template.innerHTML =
     </div>
 </div>
 `
+
+/*
+
+            <button class="tablinks" id="compressor">compressor</button>
+
+            <div class="tabcontent" id="compressorDiv">
+                <p>threshold</p><p id="threshold-value">0dB</p>
+                <input id="threshold" type="range" min="-90" max="0" value="0" step="0.01">
+                <p>ratio</p> <p id="ratio-value">1 : 1</p>
+                <input id="ratio" type="range" min="1" max="48" value="1" step="0.01">
+                <p>attack</p><p id="attack-value">10ms</p>
+                <input id="attack" type="range" min="0" max="50" value="10" step="0.01">
+                <p>release</p><p id="release-value">10ms</p>
+                <input id="release" type="range" min="0" max="50" value="10" step="0.01">
+            </div>
+*/
 
 
 var eqFreq = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
@@ -110,6 +117,14 @@ class multitrackPlayer extends HTMLElement{
         this.point1 = 0;
         this.point2 = this.canvasWidth;
 
+
+
+        this.compressore = {};
+        this.compressore.ratio = this.getAttribute('ratio');
+        this.compressore.attack = this.getAttribute('attack');
+        this.compressore.release = this.getAttribute('release');
+        this.compressore.threshold = this.getAttribute('threshold');
+
         //Create initial audio nodes chain
         this.createAudioNodes();
         
@@ -118,7 +133,7 @@ class multitrackPlayer extends HTMLElement{
         this.encoding = this.getAttribute('encoding');
         //Load channel configuration from "layout" attribute
         var layout = this.getAttribute('layout');
-        this.configuration = layout.split('');
+        this.configuration = layout.split(',');
         console.log(this.configuration);
         //Load audio from "file" attribute and call "loaded" function if everything is fine
         multitrackPlayer.loadAudio(this.getAttribute('file'))
@@ -154,8 +169,7 @@ class multitrackPlayer extends HTMLElement{
         this.analyser = this.audioContext.createAnalyser();
         this.analyser.fftSize = 256;
         this.analyserbufferLength = this.analyser.frequencyBinCount;
-        this.analyserDataArray = new Uint8Array(this.analyserbufferLength);
-        
+        this.analyserDataArray = new Uint8Array(this.analyserbufferLength);  
     };
     
     createEq(){
@@ -232,6 +246,12 @@ class multitrackPlayer extends HTMLElement{
             this.compressor[i] = this.audioContext.createDynamicsCompressor();
             this.compressor[i].channelCountMode = "explicit";
             this.compressor[i].channelCount = 1;
+
+            this.compressor[i].ratio.setValueAtTime(this.compressore.ratio, this.audioContext.currentTime);
+            this.compressor[i].threshold.setValueAtTime(this.compressore.threshold, this.audioContext.currentTime);
+            this.compressor[i].attack.setValueAtTime(this.compressore.attack, this.audioContext.currentTime);
+            this.compressor[i].release.setValueAtTime(this.compressore.release, this.audioContext.currentTime);
+
         }
     }
 
@@ -409,13 +429,13 @@ class multitrackPlayer extends HTMLElement{
                     console.log("connecting ch: " + i + " to " + self.configuration[i]);
                     if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
                     else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1 % self.channels], i);
-                    else if(self.configuration[i] === 'B') self.routeSplitter.connect(self.routes[2 % self.channels], i);
-                    else if(self.configuration[i] === 'D') self.routeSplitter.connect(self.routes[3 % self.channels], i);
+                    else if(self.configuration[i] === 'LS') self.routeSplitter.connect(self.routes[2 % self.channels], i);
+                    else if(self.configuration[i] === 'RS') self.routeSplitter.connect(self.routes[3 % self.channels], i);
                     else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
                         self.routeSplitter.connect(self.routes[0], i);
                         self.routeSplitter.connect(self.routes[1 % self.channels], i);
                     }
-                    else if(self.configuration[i] === 'S'){
+                    else if(self.configuration[i] === 'LFE'){
                         //subwoofer?
                     }                    
                 }
@@ -524,6 +544,7 @@ class multitrackPlayer extends HTMLElement{
             }
            else this.lastTime = this.now;
             var position = multitrackPlayer.map_range(this.elapsed + this.source.loopStart, 0, this.currentBuffer.duration, 0, this.canvasWidth);
+            this.dostai = position / this.canvasWidth;
             this.context[1].strokeStyle = '#f22';
             this.context[1].beginPath();
             this.context[1].moveTo(position, 0);
@@ -600,7 +621,10 @@ class multitrackPlayer extends HTMLElement{
         self.isPlaying = true;
         self.source.start(self.audioContext.currentTime, self.calculateTime(playPos), self.calculateTime(self.endPoint) - self.calculateTime(playPos));
         self.source.addEventListener('ended', () => {
-            if(!self.loop) self.stop();
+            if(!self.loop){
+                self.stop();
+                self.restartPoint = null;
+            } 
             else{
                 var isChrome = window.chrome;
                 if(isChrome && self.isPlaying && !self.clicking)  self.restartAt(self.startPoint, false);
@@ -642,16 +666,47 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('equalizer').addEventListener('click', function(e){
             self.openTab(e, this.id);
         });
+        /*
         this.shadowRoot.getElementById('compressor').addEventListener('click', function(e){
             self.openTab(e, this.id);
         });
+        */
         this.shadowRoot.getElementById('play').addEventListener('click', function(){
             self.lastTime = self.audioContext.currentTime;
-            self.mettiPlay(self.startPoint);
+            console.log(self.restartPoint);
+            if(self.restartPoint != null){
+                self.restartAt(self.restartPoint, true);
+            }
+            else{
+                self.mettiPlay(self.startPoint);
+            }
+        });
+        this.shadowRoot.getElementById('pause').addEventListener('click', function(){
+            self.lastTime = self.audioContext.currentTime;
+            self.stop();
+            self.restartPoint = self.dostai;
         });
         this.shadowRoot.getElementById('stop').addEventListener('click', function(){
+           self.restartPoint = null;
            self.stop();
         });
+        /*
+        this.shadowRoot.getElementById('forward').addEventListener('click', function(){
+            console.log("FORWARD!")            
+            self.restartPoint = Math.min(self.dostai + 0.1, 1.0);
+            console.log(self.restartPoint);
+           
+            self.restartAt(self.restartPoint, false);
+            
+        });
+        this.shadowRoot.getElementById('backward').addEventListener('click', function(){
+            console.log("BACK!")            
+            self.restartPoint = Math.max(self.dostai - 0.1, 0.0);
+            
+            self.restartAt(self.restartPoint, false);
+            
+        });
+        */
         this.shadowRoot.getElementById('loop').addEventListener('click', function() {
             self.loop = this.checked;
             self.source.loop = self.loop;
@@ -688,7 +743,7 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('volumeSlider').addEventListener('change', function() {
             self.gain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
             var label = self.shadow.getElementById("volume-value");
-            label.innerHTML = this.value + "gain";
+            label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB gain";
         });
         this.shadowRoot.getElementById('lp').addEventListener('change', function() {
             self.lp.frequency.setValueAtTime(this.value, self.audioContext.currentTime);
@@ -700,7 +755,7 @@ class multitrackPlayer extends HTMLElement{
             var label = self.shadow.getElementById("hp-value");
             label.innerHTML = this.value + "Hz";
         });
-
+        /*
         this.shadowRoot.getElementById('threshold').addEventListener('change', function() {
             var n =  self.audioContext.currentTime;
             for(var c = 0; c < self.compressor.length; c++){
@@ -733,6 +788,7 @@ class multitrackPlayer extends HTMLElement{
             var label = self.shadow.getElementById("release-value");
             label.innerHTML = this.value + "ms";
         });
+        */
         this.shadow.getElementById("waveform_1").addEventListener('click', function(e){
             var bound = this.getBoundingClientRect();
             if(e.clientY < self.canvasHeight / 2){
