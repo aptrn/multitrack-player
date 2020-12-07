@@ -134,7 +134,9 @@ class multitrackPlayer extends HTMLElement{
         console.log(this.colors);
 
 
-        this.preGainValue = this.getAttribute('preGain');
+        //dB to amplitude ratio =>   ratio=10^(dB)/10)
+        //amplitude ratio to dB =>   dB=10*log10(ratio) 
+        this.preGainValue = Math.pow(10 , (this.getAttribute('preGain') / 10));
 
         this.compressore = {};
         this.compressore.ratio = this.getAttribute('ratio');
