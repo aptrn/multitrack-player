@@ -1,5 +1,4 @@
 const template = document.createElement('template');
-//analizzatore di spettro
 template.innerHTML = 
 `
 <div class="whole">
@@ -9,9 +8,9 @@ template.innerHTML =
         <div id="main">
             <div id="transport">
                 <button id="backward"><div id="backwardbutton"/>BACKWARD</button>
-                <button id="play"><div id="playbutton"/></button>
-                <button id="pause"><div id="pausebutton"/></button>
-                <button id="stop"><div id="stopbutton"/></button>  
+                <button id="play"><div id="playbutton"/>play</button>
+                <button id="pause" style="display:none;">pause<div id="pausebutton"/></button>
+                <button id="stop"><div id="stopbutton"/>stop</button>  
                 <button id="forward"><div id="forwardbutton"/>FORWARD</button>
                 <input id="loop" type="checkbox">loop</input>
             </div>
@@ -549,6 +548,15 @@ class multitrackPlayer extends HTMLElement{
     };    
       
     static drawPlayhead() {
+        if(this.isPlaying){
+            this.shadowRoot.getElementById('play').style.display = "none";
+            this.shadowRoot.getElementById('pause').style.display = "inline-block";
+        } 
+        else{ 
+            this.shadowRoot.getElementById('play').style.display = "inline-block";
+            this.shadowRoot.getElementById('pause').style.display = "none";
+        }
+
         this.activeBufferDuration = this.source.loopEnd - this.source.loopStart;
         this.now = this.audioContext.currentTime;
 
@@ -964,6 +972,10 @@ class multitrackPlayer extends HTMLElement{
                 self.moveStart = false;
                 self.moveEnd = false;  
                 self.drag = false;  
+                
+                if(self.restartPoint < self.startPoint) {
+                    self.restartAt(self.startPoint, false);
+                }
                 var isChrome = window.chrome;
                 if(self.keepChrome){
                     self.keepChrome = false;
@@ -974,6 +986,9 @@ class multitrackPlayer extends HTMLElement{
                 self.moveStart = false;
                 self.moveEnd = false; 
                 self.drag = false;
+                if(self.restartPoint > self.endPoint){
+                    self.restartAt(self.startPoint, false);
+                } 
                 if(self.keepChrome){
                     self.keepChrome = false;
                     self.restartAt(self.startPoint, true);
@@ -983,6 +998,11 @@ class multitrackPlayer extends HTMLElement{
                 self.moveStart = false;
                 self.moveEnd = false; 
                 self.drag = false;
+
+                if(self.restartPoint < self.startPoint && self.restartPoint > self.endPoint){
+                    
+                    self.restartAt(self.startPoint, false);
+                } 
                 if(self.keepChrome){
                     self.keepChrome = false;
                     self.restartAt(self.startPoint, true);
