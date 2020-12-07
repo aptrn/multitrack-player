@@ -3,10 +3,9 @@ const template = document.createElement('template');
 template.innerHTML = 
 `
 <div class="whole">
-    
     <link href="/player/style.css" rel="stylesheet" type="text/css">  
     <div id="player">
-    <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">
+        <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">
         <div id="main">
             <div id="transport">
                 <button id="backward"><div id="backwardbutton"/>BACKWARD</button>
@@ -25,8 +24,6 @@ template.innerHTML =
             </div>
         </div>
         <div id="parameters">
-
-   
             <button class="tablinks" id="filter">filter</button>
             <button class="tablinks" id="equalizer">equalizer</button>
 
@@ -41,11 +38,11 @@ template.innerHTML =
                 </div>
             </div>
         </div>
-        <div>
-        <div id="wave">
-        </div>
-        <div id="spectrum">
-        </div>
+        <div id="canvasDiv">
+            <div id="wave">
+            </div>
+            <div id="spectrum">
+            </div>
         </div>
     </div>
 </div>
@@ -87,11 +84,17 @@ class multitrackPlayer extends HTMLElement{
         }
 
         //Create two draw context
+
+        this.widthMulti = this.getAttribute('widthMultiplier');
+        this.heightMulti = this.getAttribute('heightMultiplier');
+        
         this.context = new Array(2);
-        this.canvasWidth = this.shadowRoot.querySelector('.whole').offsetWidth * 3 / 5;
-        this.canvasHeight = this.shadowRoot.querySelector('.whole').offsetWidth / 3;
+        this.canvasWidth = this.shadowRoot.querySelector('#canvasDiv').scrollWidth * this.widthMulti;
+        this.canvasHeight = this.shadowRoot.querySelector('#canvasDiv').scrollWidth * this.widthMulti * this.heightMulti;
         
 
+        console.log(this.canvasWidth)
+        console.log(this.canvasHeight )
         //Create audio context
         var AudioContext = window.AudioContext || window.webkitAudioContext || false;
         if (AudioContext){
@@ -241,7 +244,8 @@ class multitrackPlayer extends HTMLElement{
         var self = this;
             this.audioContext.decodeAudioData(req.response, 
             function (buffer){
-                self.audioContext.destination.channelCount = Math.min(self.audioContext.destination.maxChannelCount, buffer.numberOfChannels);
+                if(self.encoding === "MONO" && self.audioContext.destination.maxChannelCount > 1) self.audioContext.destination.channelCount = 2;
+                else self.audioContext.destination.channelCount = Math.min(self.audioContext.destination.maxChannelCount, buffer.numberOfChannels);
                 self.source = self.audioContext.createBufferSource();
                 self.source.channelCount = self.audioContext.destination.channelCount;
                 self.currentBuffer = buffer;
@@ -440,6 +444,23 @@ class multitrackPlayer extends HTMLElement{
                         self.phaseInversion.connect(self.routes[1 % self.channels]);                            //attach to right
                     }   
                  }
+            }
+            else if (self.encoding === "MONO"){
+                for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
+                    console.log("connecting ch: " + i + " to " + self.configuration[i]);
+                    if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
+                        self.gainL = self.audioContext.createGain();                    //create dummy gain with gain = 1
+                        self.gainR = self.audioContext.createGain();                    //create dummy gain with gain = 1
+                        self.gainL.gain.setValueAtTime(1, self.audioContext.currentTime);
+                        self.gainR.gain.setValueAtTime(1, self.audioContext.currentTime);
+                        
+                        self.routeSplitter.connect(self.gainL, i);
+                        self.routeSplitter.connect(self.gainR, i);
+
+                        self.gainL.connect(self.routes[0], i);
+                        self.gainR.connect(self.routes[1 % self.channels], i);
+                    }             
+                }
             }
             else{
                 for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
@@ -734,11 +755,6 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('equalizer').addEventListener('click', function(e){
             self.openTab(e, this.id);
         });
-        /*
-        this.shadowRoot.getElementById('compressor').addEventListener('click', function(e){
-            self.openTab(e, this.id);
-        });
-        */
         this.shadowRoot.getElementById('play').addEventListener('click', function(){
             if(!self.isPlaying){
                 self.lastTime = self.audioContext.currentTime;
@@ -758,48 +774,35 @@ class multitrackPlayer extends HTMLElement{
             self.restartPoint = self.playheadPosition;
         });
         this.shadowRoot.getElementById('stop').addEventListener('click', function(){
-           self.restartPoint = null;
-           self.stop();
+            self.lastTime = self.audioContext.currentTime;
+            if(self.isPlaying){
+                self.stop();
+            }
+            self.restartAt(self.startPoint, false);
+            self.restartPoint = null;
         });
         
         this.shadowRoot.getElementById('forward').addEventListener('click', function(){
             console.log("FORWARD!")            
             self.restartPoint = Math.min(self.playheadPosition + 0.1, self.endPoint);
+            if(self.restartPoint == self.endPoint) self.restartPoint = self.startPoint;
             console.log(self.restartPoint);
             var isChrome = window.chrome;
             if(isChrome && self.isPlaying) self.restartChrome = true;
-                
-            self.restartAt(self.restartPoint, self.isPlaying);
-            
+            self.restartAt(self.restartPoint, self.isPlaying);            
         });
         this.shadowRoot.getElementById('backward').addEventListener('click', function(){
             console.log("BACK!")            
             self.restartPoint = Math.max(self.playheadPosition - 0.1, self.startPoint);
             var isChrome = window.chrome;
             if(isChrome && self.isPlaying) self.restartChrome = true;
-                
-            self.restartAt(self.restartPoint,  self.isPlaying);
-            
+            self.restartAt(self.restartPoint, self.isPlaying);
         });
-        
         this.shadowRoot.getElementById('loop').addEventListener('click', function() {
             self.loop = this.checked;
             self.source.loop = self.loop;
         });
-
-        /*
-        this.shadowRoot.getElementById('start').addEventListener('change', function() {
-            self.updateBounds(this.value, self.endPoint);
-            var label = self.shadow.getElementById("start-value");
-            label.innerHTML = self.source.loopStart + " sec";
-        });
-        this.shadowRoot.getElementById('end').addEventListener('change', function() {
-            self.updateBounds(self.startPoint, this.value);
-            var label = self.shadow.getElementById("end-value");
-            label.innerHTML = self.source.loopEnd + " sec";
-        });
-        */
-       this.shadowRoot.getElementById('rotation').addEventListener('change', function() {
+        this.shadowRoot.getElementById('rotation').addEventListener('change', function() {
             if(self.encoding === "B-Format"){
                 this.newRot = multitrackPlayer.map_range(this.value, 0, 1, 0, 360);
                 self.sceneRotator.yaw = this.newRot;
@@ -811,7 +814,9 @@ class multitrackPlayer extends HTMLElement{
                 self.phaseInversion.gain.setValueAtTime(-this.newWidth, self.audioContext.currentTime);
             }
             else if (self.encoding === "MONO"){
-
+                this.newPan = multitrackPlayer.map_range(this.value, 0, 1, -1, 1);
+                self.gainL.gain.setValueAtTime(1 - this.value, self.audioContext.currentTime);
+                self.gainR.gain.setValueAtTime(this.value, self.audioContext.currentTime);
             }
             console.log(this.value);
         });
