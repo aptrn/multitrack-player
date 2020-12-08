@@ -1,18 +1,18 @@
 const template = document.createElement('template');
 template.innerHTML = 
 `
-<div class="whole">
+<div id="box-np-main">
     <link href="/player/style.css" rel="stylesheet" type="text/css">  
     <div id="player">
         <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">
         <div id="main">
             <div id="transport">
-                <button id="backward"><div id="backwardbutton"/>BACKWARD</button>
-                <button id="play"><div id="playbutton"/>play</button>
-                <button id="pause" style="display:none;">pause<div id="pausebutton"/></button>
-                <button id="stop"><div id="stopbutton"/>stop</button>  
-                <button id="forward"><div id="forwardbutton"/>FORWARD</button>
-                <input id="loop" type="checkbox">loop</input>
+                <button id="btn-np-backward">BACKWARD</button>
+                <button id="btn-np-play">play</button>
+                <button id="btn-np-pause" style="display:none;">pause</button>
+                <button id="btn-np-stop">stop</button>  
+                <button id="btn-np-forward">FORWARD</button>
+                <input id="btn-np-loop" type="checkbox">loop</input>
             </div>
             <div id="mutes">
             </div>
@@ -70,7 +70,7 @@ class multitrackPlayer extends HTMLElement{
     constructor(){
         super();
         this._authorized = this.getAttribute('auth');
-        //console.log("Auth: " + this._authorized);
+        
         //Add template html
         this.attachShadow({ mode: 'open'});
         this.shadowRoot.appendChild(template.content.cloneNode(true));
@@ -82,18 +82,15 @@ class multitrackPlayer extends HTMLElement{
             tabcontent[i].style.display = "none";
         }
 
-        //Create two draw context
-
         this.widthMulti = this.getAttribute('widthMultiplier');
         this.heightMulti = this.getAttribute('heightMultiplier');
         
+        //Create two draw context
         this.context = new Array(2);
         this.canvasWidth = this.shadowRoot.querySelector('#canvasDiv').scrollWidth * this.widthMulti;
         this.canvasHeight = this.shadowRoot.querySelector('#canvasDiv').scrollWidth * this.widthMulti * this.heightMulti;
         
 
-        console.log(this.canvasWidth)
-        console.log(this.canvasHeight )
         //Create audio context
         var AudioContext = window.AudioContext || window.webkitAudioContext || false;
         if (AudioContext){
@@ -129,8 +126,6 @@ class multitrackPlayer extends HTMLElement{
 
 
         this.font = this.getAttribute('font');
-
-        console.log(this.colors);
 
 
         //dB to amplitude ratio =>   ratio=10^(dB)/10)
@@ -202,27 +197,38 @@ class multitrackPlayer extends HTMLElement{
             this.eq[i].type = "peaking";
             this.eq[i].frequency.setValueAtTime(eqFreq[i], this.audioContext.currentTime);
         }
+
+        var clr = document.createElement("div");
+        clr.setAttribute("class", "clr");
+
         //Assign sliders to frequency gain parameter
         var elementEq = this.shadow.getElementById('equalizerDiv');
-        for(var i = 0; i < this.eq.length; i++){
-            var label = document.createElement("p");
-            label.id = "eq_label_" + i;
-            label.innerHTML = eqFreq[i] + "Hz";
-            elementEq.appendChild(label);
+            for(var i = 0; i < this.eq.length; i++){
+            var box = document.createElement("div");
+            box.setAttribute("class", "np-box-eq-bar");
+            
             var nEq = document.createElement("input");
             nEq.number = i;
             nEq.id = "eq_" + i;
             nEq.type = "range";
-            nEq.orient = "vertical";
             nEq.min = -10;
             nEq.max = 10;
             nEq.value = 0;
             nEq.step = 0.001;
-            elementEq.appendChild(nEq);
+            nEq.setAttribute("orient", "vertical");
+            nEq.setAttribute("class", "np-eq-bar");
+            box.appendChild(nEq);
             nEq.addEventListener('change', function() {
                 self.eq[this.number].gain.setValueAtTime(this.value, self.audioContext.currentTime);
             });
+
+            var label = document.createElement("span");
+            label.id = "eq_label_" + i;
+            label.innerHTML = eqFreq[i] + "Hz";
+            box.appendChild(label);
+            elementEq.appendChild(box);
         }
+        elementEq.appendChild(clr);
     }
 
     static async loadAudio(url) {                                                // Load Audio buffer and fill this.source   
@@ -396,14 +402,24 @@ class multitrackPlayer extends HTMLElement{
             self.muteSplitter.connect(self.mutes[i], i);
             self.mutes[i].connect(self.muteMerger, 0, i);
             var nMute = document.createElement("input");
-            nMute.innerText = self.configuration[i];
+            nMute.setAttribute("class", "chk-mute-channel");
+            nMute.setAttribute("data-count", i);
+            nMute.setAttribute("data-count", self.configuration[i]);
             nMute.number = i;
             nMute.type = "checkbox";
-            self.elementMutes.appendChild(nMute);
+
             nMute.addEventListener('click', function(){
                 //console.log("mute " + this.number + " = " + this.checked); 
                 self.mutes[this.number].gain.setValueAtTime(this.checked ? 0 : 1, self.audioContext.currentTime);
             });
+
+            var spn = document.createElement('span')
+            spn.innerHTML = " " + self.configuration[i];
+
+            var lbl = document.createElement('label');
+            lbl.appendChild(nMute);
+            lbl.appendChild(spn);
+            self.elementMutes.appendChild(lbl);
         }
         if(self.encoding === "B-Format"){
             self.binDecoder = new ambisonics.binDecoder(self.audioContext, parseInt(self.configuration[0]));                 //create B-Format to binaural decoder
@@ -491,13 +507,6 @@ class multitrackPlayer extends HTMLElement{
         return buff;
     }
 
-    static componentToHex(...c) {
-        var hex = c.toString(16);
-        return hex.length == 1 ? "0" + hex : hex;
-      }
-    static rgbToHex(...rgb) {
-        return String("#" + multitrackPlayer.componentToHex(rgb[0]) + multitrackPlayer.componentToHex(rgb[1]) + multitrackPlayer.componentToHex(rgb[2]));
-    }
     static displayBuffer(obj, buff) {       // Clear canvas and draw every channel of the buffer
         var self = obj;
         //self.context[0].save();
@@ -549,12 +558,12 @@ class multitrackPlayer extends HTMLElement{
       
     static drawPlayhead() {
         if(this.isPlaying){
-            this.shadowRoot.getElementById('play').style.display = "none";
-            this.shadowRoot.getElementById('pause').style.display = "inline-block";
+            this.shadowRoot.getElementById('btn-np-play').style.display = "none";
+            this.shadowRoot.getElementById('btn-np-pause').style.display = "inline-block";
         } 
         else{ 
-            this.shadowRoot.getElementById('play').style.display = "inline-block";
-            this.shadowRoot.getElementById('pause').style.display = "none";
+            this.shadowRoot.getElementById('btn-np-play').style.display = "inline-block";
+            this.shadowRoot.getElementById('btn-np-pause').style.display = "none";
         }
 
         this.activeBufferDuration = this.source.loopEnd - this.source.loopStart;
@@ -765,7 +774,7 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('equalizer').addEventListener('click', function(e){
             self.openTab(e, this.id);
         });
-        this.shadowRoot.getElementById('play').addEventListener('click', function(){
+        this.shadowRoot.getElementById('btn-np-play').addEventListener('click', function(){
             if(!self.isPlaying){
                 self.lastTime = self.audioContext.currentTime;
                 console.log(self.isPlaying);
@@ -778,12 +787,12 @@ class multitrackPlayer extends HTMLElement{
                 self.restartPoint = null;
             }
         });
-        this.shadowRoot.getElementById('pause').addEventListener('click', function(){
+        this.shadowRoot.getElementById('btn-np-pause').addEventListener('click', function(){
             self.lastTime = self.audioContext.currentTime;
             self.stop();
             self.restartPoint = self.playheadPosition;
         });
-        this.shadowRoot.getElementById('stop').addEventListener('click', function(){
+        this.shadowRoot.getElementById('btn-np-stop').addEventListener('click', function(){
             self.lastTime = self.audioContext.currentTime;
             if(self.isPlaying){
                 self.stop();
@@ -792,7 +801,7 @@ class multitrackPlayer extends HTMLElement{
             self.restartPoint = null;
         });
         
-        this.shadowRoot.getElementById('forward').addEventListener('click', function(){
+        this.shadowRoot.getElementById('btn-np-forward').addEventListener('click', function(){
             console.log("FORWARD!")            
             self.restartPoint = Math.min(self.playheadPosition + 0.1, self.endPoint);
             if(self.restartPoint == self.endPoint) self.restartPoint = self.startPoint;
@@ -801,14 +810,14 @@ class multitrackPlayer extends HTMLElement{
             if(isChrome && self.isPlaying) self.restartChrome = true;
             self.restartAt(self.restartPoint, self.isPlaying);            
         });
-        this.shadowRoot.getElementById('backward').addEventListener('click', function(){
+        this.shadowRoot.getElementById('btn-np-backward').addEventListener('click', function(){
             console.log("BACK!")            
             self.restartPoint = Math.max(self.playheadPosition - 0.1, self.startPoint);
             var isChrome = window.chrome;
             if(isChrome && self.isPlaying) self.restartChrome = true;
             self.restartAt(self.restartPoint, self.isPlaying);
         });
-        this.shadowRoot.getElementById('loop').addEventListener('click', function() {
+        this.shadowRoot.getElementById('btn-np-loop').addEventListener('click', function() {
             self.loop = this.checked;
             self.source.loop = self.loop;
         });
@@ -910,6 +919,7 @@ class multitrackPlayer extends HTMLElement{
             var bound = this.getBoundingClientRect();
             var x = e.clientX - bound.left;
             if(e.clientY > self.canvasHeight / 2){   //Se premi nella metà inferiore
+                self.restartPoint = self.playheadPosition;
                 var dist = self.endPosition - self.startPosition;
                 if(Math.abs(x - self.startPosition) < dist * 0.2){
                     //console.log("move start");
@@ -974,6 +984,7 @@ class multitrackPlayer extends HTMLElement{
                 self.drag = false;  
                 
                 if(self.restartPoint < self.startPoint) {
+                    self.restartPoint = self.startPoint;
                     self.restartAt(self.startPoint, false);
                 }
                 var isChrome = window.chrome;
@@ -987,6 +998,7 @@ class multitrackPlayer extends HTMLElement{
                 self.moveEnd = false; 
                 self.drag = false;
                 if(self.restartPoint > self.endPoint){
+                    self.restartPoint = self.startPoint;
                     self.restartAt(self.startPoint, false);
                 } 
                 if(self.keepChrome){
@@ -999,8 +1011,8 @@ class multitrackPlayer extends HTMLElement{
                 self.moveEnd = false; 
                 self.drag = false;
 
-                if(self.restartPoint < self.startPoint && self.restartPoint > self.endPoint){
-                    
+                if(self.restartPoint < self.startPoint || self.restartPoint > self.endPoint){
+                    self.restartPoint = self.startPoint;
                     self.restartAt(self.startPoint, false);
                 } 
                 if(self.keepChrome){
@@ -1019,6 +1031,7 @@ class multitrackPlayer extends HTMLElement{
                 } 
             }
         })
+        self.shadow.getElementById("box-np-main").style.opacity = 1;
     }
     static eventFire(el, etype){
         if (el.fireEvent) {
