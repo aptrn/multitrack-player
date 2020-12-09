@@ -599,7 +599,18 @@ class multitrackPlayer extends HTMLElement{
         ctx.closePath();
         ctx.fill();
     };    
-      
+    
+    static secToMin(d) {
+        d = Number(d);
+        var h = Math.floor(d / 3600);
+        var m = Math.floor(d % 3600 / 60);
+        var s = Math.floor(d % 3600 % 60);
+        var hDisplay = h > 0 ? h + ":" : "";
+        var mDisplay = m > 0 ? m : "0";
+        var sDisplay = s > 0 ? s >= 10 ? s : "0" + s : "00";
+        return String(hDisplay + mDisplay + ":" + sDisplay); 
+    }
+
     static drawPlayhead() {
         if(this.isPlaying){
             this.shadowRoot.getElementById('btn-np-play').style.display = "none";
@@ -690,15 +701,20 @@ class multitrackPlayer extends HTMLElement{
 
     
         this.canvas.ui.font = this.font;
+        var startText = multitrackPlayer.secToMin(this.source.loopStart);
+        var endText = multitrackPlayer.secToMin(this.source.loopEnd);
+      
+        
         //START LABEL
         this.canvas.ui.textAlign = "left";
         this.canvas.ui.fillStyle = 'rgb('+ this.colors.textColor[0] +','+ this.colors.textColor[1] +','+ this.colors.textColor[2] +')';
-        this.canvas.ui.fillText(Number(this.source.loopStart / 60).toFixed(2).replace(/\./g, ":"), this.startPosition, 20);
+        this.canvas.ui.fillText(startText, this.startPosition, 20);
+        //this.canvas.ui.fillText(String(Number(this.source.loopStart / 60).toFixed(0)) + ":" + String(Number(this.source.loopStart % 60).toFixed(0)), this.startPosition, 20);
         
         
         //END LABEL
         this.canvas.ui.textAlign = "right";
-        this.canvas.ui.fillText(Number(this.source.loopEnd / 60).toFixed(2).replace(/\./g, ":"), this.endPosition, 20); 
+        this.canvas.ui.fillText(endText, this.endPosition, 20); 
     
 
         
