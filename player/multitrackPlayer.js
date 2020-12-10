@@ -2,51 +2,50 @@ const template = document.createElement('template');
 template.innerHTML = 
 `
 <div id="box-np-main">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
     <link href="/player/style.css" rel="stylesheet" type="text/css">  
     <div id="player">
-        <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">
-        <div id="main">
-            <div id="transport">
-                <button id="btn-np-backward">BACKWARD</button>
-                <button id="btn-np-play">play</button>
-                <button id="btn-np-pause" style="display:none;">pause</button>
-                <button id="btn-np-stop">stop</button>  
-                <button id="btn-np-forward">FORWARD</button>
-                <input id="btn-np-loop" type="checkbox">loop</input>
-            </div>
-            <div id="mutes">
-            </div>
-
-            <div id="volumeDiv">
-                <h2>out volume</h2><p id="volume-value">0dB gain</p>
-                <input id="volumeSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">
-            </div>
-        </div>
-        <div id="parameters">
-            <button class="tablinks" id="filter">filter</button>
-            <button class="tablinks" id="equalizer">equalizer</button>
-
-            <div class="tabcontent" id="filterDiv">
-                <p>lp</p><p id="lp-value">20000Hz</p>
-                <input id="lp" type="range" min="15000" max="20000" value="19999" step="1">
-                <p>hp</p><p id="hp-value">20Hz</p>
-                <input id="hp" type="range" min="20" max="300" value="20" step="1">
-            </div>
-            <div class="tabcontent" id="equalizerDiv">
-                <div id="equalizerDiv">
-                </div>
-            </div>
-        </div>
         <div id="canvasDiv">
+            <div id="tracks">
+            </div>
             <div id="ui">
             </div>
-            <div id="waves">
-            </div>
+    
             <div id="analysers">
             </div>
-            <div id="track_meters">
+            <div id="master">
             </div>
-            <div id="master_meters">
+        </div>
+            
+        <div id=sotto>
+            <div id="transport">
+                    <button id="btn-np-backward">BACKWARD</button>
+                    <button id="btn-np-play">play</button>
+                    <button id="btn-np-pause" style="display:none;">pause</button>
+                    <button id="btn-np-stop">stop</button>  
+                    <button id="btn-np-forward">FORWARD</button>
+                    <input id="btn-np-loop" type="checkbox">loop</input>
+            </div>
+            <div id="volumeDiv">
+                <p id="volume-value">0dB gain</p>
+                <input id="volumeSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">volume</input>
+            </div>
+            <div id="parameters">
+                <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">rotation</input>
+                <button class="tablinks" id="filter">filter</button>
+                <button class="tablinks" id="equalizer">equalizer</button>
+
+                <div class="tabcontent" id="filterDiv">
+                    <p>lp</p><p id="lp-value">20000Hz</p>
+                    <input id="lp" type="range" min="15000" max="20000" value="19999" step="1">
+                    <p>hp</p><p id="hp-value">20Hz</p>
+                    <input id="hp" type="range" min="20" max="300" value="20" step="1">
+                </div>
+                <div class="tabcontent" id="equalizerDiv">
+                    <div id="equalizerDiv">
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -297,6 +296,14 @@ class multitrackPlayer extends HTMLElement{
 
 
     displayAndConnect(){
+        var tracksDiv = this.shadow.getElementById('tracks');
+        for(var i = 0; i < this.source.buffer.numberOfChannels; i++){
+            var trackDiv = document.createElement('div');
+            trackDiv.id = "track_" + i;
+            tracksDiv.append(trackDiv);
+        }
+        this.createMutes(this.source.buffer);         //Create remaining audio nodes, about muting and routing
+        
         this.canvas = {};
         this.canvas.ui = this.createCanvas("ui", 0, this.canvasWidth, this.canvasHeight); //playehead
         this.canvas.analyser = this.createCanvas("analyser", 0, this.canvasWidth, this.canvasHeight / 8); //spectrum
@@ -314,7 +321,6 @@ class multitrackPlayer extends HTMLElement{
         this.source.loopEnd = this.currentBuffer.duration;
 
         this.displayFileInfo();        //Inject title and duration into HTML
-        this.createMutes(this.source.buffer);         //Create remaining audio nodes, about muting and routing
         multitrackPlayer.displayBuffer(this, this.analyzeData(this.source.buffer)); //Analyze buffer samples and draw them into first canvas
         this.lp.connect(this.hp);                  //Connect nodes
         this.hp.connect(this.eq[0]);               //Connect hipass to first peaking eq
@@ -384,29 +390,30 @@ class multitrackPlayer extends HTMLElement{
             newCanvas.id = "analyser" + index;
             analyserDiv.appendChild(newCanvas);
         }
-        else if (type === "wave"){
-            var waveDiv = this.shadow.getElementById('waves');
-            newCanvas.id = "wave" + index;
-            waveDiv.appendChild(newCanvas);
-        }
-        else if (type === "trackMeter"){
-            var meterDiv = this.shadow.getElementById('track_meters');
-            newCanvas.id = "trackMeter" + index;
-            meterDiv.appendChild(newCanvas);
-        }
         else if (type === "masterMeter"){
-            var meterDiv = this.shadow.getElementById('master_meters');
+            var masterDiv = this.shadow.getElementById('master');
             newCanvas.id = "masterMeter" + index;
-            meterDiv.appendChild(newCanvas);
+            masterDiv.appendChild(newCanvas);
+        }
+        else{
+            var trackDiv = this.shadow.getElementById('track_' + index);
+            if (type === "wave"){
+                newCanvas.id = "wave" + index;
+                trackDiv.appendChild(newCanvas);
+            }
+            else if (type === "trackMeter"){
+                newCanvas.id = "trackMeter" + index;
+                trackDiv.appendChild(newCanvas);
+            }
         }
         return newCanvas.getContext('2d');
     }
   
     displayFileInfo(){    //Inject title and duration into HTML
-        var main = this.shadow.getElementById("main");
-        var infos = document.createElement("h3");
-        infos.innerHTML = "Title: " + this.getAttribute('filename') + " Lenght: " + this.currentBuffer.duration + "s";
-        main.prepend(infos);
+        //var main = this.shadow.getElementById("main");
+        //var infos = document.createElement("h3");
+        //infos.innerHTML = "Title: " + this.getAttribute('filename') + " Lenght: " + this.currentBuffer.duration + "s";
+        //main.prepend(infos);
     }
 
     recreateBuffer(){
@@ -426,8 +433,8 @@ class multitrackPlayer extends HTMLElement{
         self.source.connect(self.preGain);
         self.preGain.connect(self.muteSplitter);
         self.mutes = new Array(buffer.numberOfChannels);            //create a gain node and bind the mute checkbox for each channel in buffer
-        self.elementMutes = self.shadow.getElementById('mutes');
         for(var i = 0; i < buffer.numberOfChannels; i++){
+            var trackDiv = self.shadow.getElementById('track_' + i);
             self.mutes[i] = self.audioContext.createGain();
             self.mutes[i].channelCount = 1;
             self.mutes[i].gain.setValueAtTime(1, self.audioContext.currentTime);
@@ -452,7 +459,7 @@ class multitrackPlayer extends HTMLElement{
             var lbl = document.createElement('label');
             lbl.appendChild(nMute);
             lbl.appendChild(spn);
-            self.elementMutes.appendChild(lbl);
+            trackDiv.appendChild(lbl);
         }
         if(self.encoding === "B-Format"){
             self.binDecoder = new ambisonics.binDecoder(self.audioContext, parseInt(self.configuration[0]));                 //create B-Format to binaural decoder
