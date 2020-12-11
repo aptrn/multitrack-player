@@ -1,0 +1,16 @@
+.no-space {
+    display: block;
+    bottom: 0;
+    top: 0;
+    padding: 0;
+    margin: 0;
+    height: 100%;
+}
+
+#sotto {
+    display: inline-block;
+}
+
+.mute-name {
+    background-color: palevioletred;
+}
