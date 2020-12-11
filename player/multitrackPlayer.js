@@ -1,13 +1,14 @@
 const template = document.createElement('template');
 template.innerHTML = 
 `
+<!doctype html>
+<html lang="en">
 <div id="box-np-main">
-
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
     <link href="/player/style.css" rel="stylesheet" type="text/css">  
     <div id="player">
         <div id="canvasDiv">
-            <div id="tracks">
+            <div id="tracks" class="row">
             </div>
             <div id="ui">
             </div>
@@ -18,7 +19,7 @@ template.innerHTML =
             </div>
         </div>
             
-        <div id=sotto>
+        <div id=sotto class="row">
             <div id="transport">
                     <button id="btn-np-backward">BACKWARD</button>
                     <button id="btn-np-play">play</button>
@@ -50,6 +51,7 @@ template.innerHTML =
         </div>
     </div>
 </div>
+</html>
 `
 
 /*
@@ -92,9 +94,10 @@ class multitrackPlayer extends HTMLElement{
         
         //Create two draw context
         this.context = new Array(2);
-        this.canvasWidth = this.shadowRoot.querySelector('#canvasDiv').scrollWidth * this.widthMulti;
-        this.canvasHeight = this.shadowRoot.querySelector('#canvasDiv').scrollWidth * this.widthMulti * this.heightMulti;
-        
+        //this.canvasWidth = this.shadowRoot.querySelector('#ui').scrollWidth * this.widthMulti;
+        //this.canvasHeight = this.shadowRoot.querySelector('#ui').scrollWidth * this.widthMulti * this.heightMulti;
+        this.canvasWidth = 1000;
+        this.canvasHeight = 400;        
 
         //Create audio context
         var AudioContext = window.AudioContext || window.webkitAudioContext || false;
@@ -305,9 +308,6 @@ class multitrackPlayer extends HTMLElement{
         this.createMutes(this.source.buffer);         //Create remaining audio nodes, about muting and routing
         
         this.canvas = {};
-        this.canvas.ui = this.createCanvas("ui", 0, this.canvasWidth, this.canvasHeight); //playehead
-        this.canvas.analyser = this.createCanvas("analyser", 0, this.canvasWidth, this.canvasHeight / 8); //spectrum
-        this.canvas.master = this.createCanvas("masterMeter", 0, this.canvasWidth, this.canvasHeight); //master meters
         this.canvas.track = new Array(this.source.buffer.numberOfChannels);
         for(var i = 0; i < this.source.buffer.numberOfChannels; i++){
             this.canvas.track[i] = {};
@@ -315,6 +315,10 @@ class multitrackPlayer extends HTMLElement{
             this.canvas.track[i].wave = this.createCanvas("wave", i, this.canvasWidth, this.canvasHeight / this.source.buffer.numberOfChannels); //wave
             this.canvas.track[i].meter = this.createCanvas("trackMeter", i, this.canvasWidth / 12, this.canvasHeight / this.source.buffer.numberOfChannels); //meter
         }
+        this.canvas.ui = this.createCanvas("ui", 0, this.canvasWidth, this.canvasHeight); //playehead
+        this.canvas.analyser = this.createCanvas("analyser", 0, this.canvasWidth, this.canvasHeight / 8); //spectrum
+        this.canvas.master = this.createCanvas("masterMeter", 0, this.canvasWidth, this.canvasHeight); //master meters
+       
         //Calculate starting points and duration
         this.activeBufferDuration = this.currentBuffer.duration;
         this.source.loopStart = 0;
@@ -375,6 +379,7 @@ class multitrackPlayer extends HTMLElement{
         console.log("gain: " + this.gain.channelCount);
         console.log("destination: " + this.audioContext.destination.channelCount);
     }
+
     
     createCanvas (type, index, w, h ) {     //Create canvas element
         var newCanvas = document.createElement('canvas');
@@ -382,7 +387,14 @@ class multitrackPlayer extends HTMLElement{
         newCanvas.height = h;
         if (type === "ui"){
             var uiDiv = this.shadow.getElementById('ui');
-            newCanvas.id = "ui_" + index;
+            var waves = this.shadow.getElementById('wave0');
+            uiDiv.style.position = "absolute";
+            uiDiv.style.top = waves.offsetTop + "px";
+            uiDiv.style.left = waves.offsetLeft + "px";
+            uiDiv.style.zIndex = "11";
+            
+            newCanvas.id = "uiCanvas";
+            //newCanvas.setAttribute("class", "col-md-8-h-100");
             uiDiv.appendChild(newCanvas);
         }
         else if (type === "analyser"){
@@ -399,10 +411,13 @@ class multitrackPlayer extends HTMLElement{
             var trackDiv = this.shadow.getElementById('track_' + index);
             if (type === "wave"){
                 newCanvas.id = "wave" + index;
+
+                newCanvas.setAttribute("class", "col-md-8-h-100");
                 trackDiv.appendChild(newCanvas);
             }
             else if (type === "trackMeter"){
                 newCanvas.id = "trackMeter" + index;
+                newCanvas.setAttribute("class", "col-md-2-h-100");
                 trackDiv.appendChild(newCanvas);
             }
         }
@@ -459,6 +474,8 @@ class multitrackPlayer extends HTMLElement{
             var lbl = document.createElement('label');
             lbl.appendChild(nMute);
             lbl.appendChild(spn);
+
+            lbl.setAttribute("class", "col-md-2");
             trackDiv.appendChild(lbl);
         }
         if(self.encoding === "B-Format"){
@@ -619,6 +636,13 @@ class multitrackPlayer extends HTMLElement{
     }
 
     static drawPlayhead() {
+        var uiDiv = this.shadow.getElementById('ui');
+        var waves = this.shadow.getElementById('wave0');
+        uiDiv.style.position = "absolute";
+        uiDiv.style.top = waves.offsetTop + "px";
+        uiDiv.style.left = waves.offsetLeft + "px";
+        uiDiv.style.zIndex = "11";
+        
         if(this.isPlaying){
             this.shadowRoot.getElementById('btn-np-play').style.display = "none";
             this.shadowRoot.getElementById('btn-np-pause').style.display = "inline-block";
