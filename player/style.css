@@ -8,9 +8,41 @@
 }
 
 #sotto {
-    display: inline-block;
+    display: flex;
+    position: relative;
+    top: 20px;
 }
 
 .mute-name {
     background-color: palevioletred;
+}
+
+#tracks > div {
+    display: flex;
+}
+
+#tracks > div > label{
+    display: flex;
+}
+
+#piuSotto {
+    display: inline-flex;
+
+    top: 20px;
+}
+
+#equalizerDiv {
+    margin-left: 5%;
+}
+#equalizerDiv > div {
+    position: relative;
+    margin: 10%;
+}
+#filterDiv  {
+    margin-left: 5%;
+}
+
+#filterDiv > div {
+    position: relative;
+    margin: 1%;
 }

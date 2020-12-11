@@ -13,49 +13,53 @@ template.innerHTML =
             <div id="ui">
             </div>
     
-            <div id="analDiv" class="row-no-space">
+            <div id="analysers" class="row-no-space" style="display:flex;">
                 
-                <div id="analysers" class="col-md-12-h-100">
-                </div>
+             
                 
             </div>
             <div id="master">
             </div>
         </div>
             
-        <div id=sotto class="row" style="width:100%;">
+        <div id="sotto" class="row">
             <div id="transport" class="col-md-6">
-                    <button id="btn-np-backward">BACKWARD</button>
-                    <button id="btn-np-play">play</button>
-                    <button id="btn-np-pause" style="display:none;">pause</button>
-                    <button id="btn-np-stop">stop</button>  
-                    <button id="btn-np-forward">FORWARD</button>
+                    <button id="btn-np-backward">BW</button>
+                    <button id="btn-np-play">Play</button>
+                    <button id="btn-np-pause" style="display:none;">Pause</button>
+                    <button id="btn-np-stop">Stop</button>  
+                    <button id="btn-np-forward">FW</button>
                     <input id="btn-np-loop" type="checkbox">loop</input>
             </div>
             <div id="volumeDiv" class="col-md-2">
-                <p id="volume-value">0dB gain</p>
-                <input id="volumeSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">volume</input>
+                <input id="volumeSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">
+                <p id="volume-value">0dB</p>
             </div>
             <div id="parameters" class="col-md-4">
                 <button class="tablinks" id="filter">filter</button>
                 <button class="tablinks" id="equalizer">equalizer</button>
-
-                <div class="tabcontent" id="filterDiv">
-
-    <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">rotation</input>
-                    <p>lp</p><p id="lp-value">20000Hz</p>
-                    <input id="lp" type="range" min="15000" max="20000" value="19999" step="1">
-                    <p>hp</p><p id="hp-value">20Hz</p>
-                    <input id="hp" type="range" min="20" max="300" value="20" step="1">
+            </div>
+        </div>
+        <div id="piuSotto" class="row">
+            <div class="tabcontent" id="filterDiv" class="col-md-8">
+                <div>
+                    <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">Rotation</input>
                 </div>
-                <div class="tabcontent" id="equalizerDiv">
-                    <div id="equalizerDiv">
-                    </div>
+                <div>
+                    <input id="lp" type="range" min="15000" max="20000" value="19999" step="1">Low Pass Filter</input>
+                    <p id="lp-value">20000Hz</p>
                 </div>
+                <div>
+                    <input id="hp" type="range" min="20" max="300" value="20" step="1">High Pass Filter</input>
+                    <p id="hp-value">20Hz</p>
+                </div>
+            </div>
+            <div class="tabcontent" id="equalizerDiv" class="col-md-8">
+                
             </div>
         </div>
     </div>
-
+    
 </div>
 </html>
 `
@@ -101,17 +105,20 @@ class multitrackPlayer extends HTMLElement{
         //Create two draw context
         this.context = new Array(2);
         this.canvas = {};
-        this.canvas.whole = this.shadowRoot.querySelector('#box-np-main').scrollWidth;
-        this.canvas.waveWidth = this.canvas.whole * this.widthMulti;
+        this.canvas.whole = this.shadowRoot.querySelector('#box-np-main').scrollWidth * this.widthMulti;
+        //
+        this.canvas.waveWidth = (this.canvas.whole / 20) * 19 - (this.canvas.whole / 12) ;
         this.canvas.waveHeight = this.canvas.waveWidth * this.heightMulti;
-
-        this.canvas.analyserWidth = this.canvas.whole;
-        this.canvas.analyserHeight =  this.canvas.waveHeight / 6;
-
-        this.canvas.meterWidth = this.canvas.waveWidth / 20;
+        
+        this.canvas.meterWidth = this.canvas.whole / 20;
         this.canvas.meterHeight = this.canvas.waveHeight;
         
 
+        this.canvas.analyserWidth = this.canvas.waveWidth + this.canvas.meterWidth;
+        this.canvas.analyserHeight =  this.canvas.waveHeight / 6;
+
+        console.log(this.canvas.analyserWidth);
+        console.log(this.canvas.waveWidth + this.canvas.meterWidth);
         //this.canvasWidth = this.shadowRoot.querySelector('#ui').scrollWidth * 
         //this.canvasHeight = this.shadowRoot.querySelector('#ui').scrollWidth * this.widthMulti * this.heightMulti;
         
@@ -235,7 +242,7 @@ class multitrackPlayer extends HTMLElement{
 
         //Assign sliders to frequency gain parameter
         var elementEq = this.shadow.getElementById('equalizerDiv');
-            for(var i = 0; i < this.eq.length; i++){
+        for(var i = 0; i < this.eq.length; i++){
             var box = document.createElement("div");
             box.setAttribute("class", "np-box-eq-bar");
             
@@ -256,7 +263,7 @@ class multitrackPlayer extends HTMLElement{
 
             var label = document.createElement("span");
             label.id = "eq_label_" + i;
-            label.innerHTML = eqFreq[i] + "Hz";
+            label.innerHTML = eqFreq[i];
             box.appendChild(label);
             elementEq.appendChild(box);
         }
@@ -336,6 +343,8 @@ class multitrackPlayer extends HTMLElement{
             this.canvas.track[i].meter = this.createCanvas("trackMeter", i, this.canvas.meterWidth, this.canvas.meterHeight); //meter
         }
         this.canvas.ui = this.createCanvas("ui", 0, this.canvas.waveWidth, this.canvas.waveHeight); //playehead
+        this.canvas.analyserWidth += this.shadow.getElementById('muteLabel_' + 0).scrollWidth;
+        //console.log(this.canvas.analyserWidth + "/" + (this.canvas.waveWidth + this.canvas.meterWidth + this.shadow.getElementById('muteLabel_' + 0).scrollWidth));
         this.canvas.analyser = this.createCanvas("analyser", 0, this.canvas.analyserWidth, this.canvas.analyserHeight); //spectrum
         this.canvas.master = this.createCanvas("masterMeter", 0, this.canvas.meterWidth, this.canvas.meterHeight); //master meters
        
@@ -438,7 +447,7 @@ class multitrackPlayer extends HTMLElement{
             }
             else if (type === "trackMeter"){
                 newCanvas.id = "trackMeter" + index;
-                newCanvas.setAttribute("class", "col-md-2-h-100");
+                newCanvas.setAttribute("class", "col-md-1-h-100");
                 trackDiv.appendChild(newCanvas);
             }
         }
@@ -469,6 +478,8 @@ class multitrackPlayer extends HTMLElement{
         self.source.connect(self.preGain);
         self.preGain.connect(self.muteSplitter);
         self.mutes = new Array(buffer.numberOfChannels);            //create a gain node and bind the mute checkbox for each channel in buffer
+        self.colors.tracks = new Array(buffer.numberOfChannels); 
+       
         for(var i = 0; i < buffer.numberOfChannels; i++){
             var trackDiv = self.shadow.getElementById('track_' + i);
             self.mutes[i] = self.audioContext.createGain();
@@ -482,6 +493,7 @@ class multitrackPlayer extends HTMLElement{
             nMute.setAttribute("data-count", self.configuration[i]);
             nMute.number = i;
             nMute.type = "checkbox";
+            nMute.style.display = 'none';
 
             nMute.addEventListener('click', function(){
                 //console.log("mute " + this.number + " = " + this.checked); 
@@ -490,16 +502,28 @@ class multitrackPlayer extends HTMLElement{
             });
 
             var spn = document.createElement('span')
-            spn.innerHTML = " " + self.configuration[i];
+            spn.innerHTML = self.configuration[i];
 
+            //spn.style.position = "absolute";
+            spn.style.margin = "auto"
+            //spn.style.textAlign = "center";
+            //spn.style.top = "50%";
+            
             var lbl = document.createElement('label');
             lbl.appendChild(nMute);
             lbl.appendChild(spn);
-            //lbl.height = "100%";
+            lbl.id = "muteLabel_" + i;
+            lbl.style.margin = '0px';
+            
             //lbl.style.display = "inline-block";
             //lbl.style.height = self.canvas.meterHeight + "px";
-
-            lbl.setAttribute("class", "col-md-1 mute-name");
+            self.colors.tracks[i] = {};
+            self.colors.tracks[i].mute = new Array(3);
+            for (var k = 0; k < self.colors.tracks[i].mute.length; k++){
+                self.colors.tracks[i].mute[k] = Math.random() * 80 + 150;
+            } 
+            lbl.style.backgroundColor = 'rgb(' + self.colors.tracks[i].mute[0] + ',' + self.colors.tracks[i].mute[1] + ',' + self.colors.tracks[i].mute[2] + ')';
+            lbl.setAttribute("class", "col-md-1");
             trackDiv.appendChild(lbl);
         }
         if(self.encoding === "B-Format"){
@@ -777,6 +801,7 @@ class multitrackPlayer extends HTMLElement{
 
 
         //FREQ ANALYSER
+        
         this.canvas.analyser.clearRect(0,0, this.canvas.analyserWidth, this.canvas.analyserHeight);
 
         this.canvas.analyser.fillStyle =  'rgb(' + this.colors.analyzerBackground[0] + ',' + this.colors.analyzerBackground[1] + ',' + this.colors.analyzerBackground[2]  + ')';
@@ -793,7 +818,13 @@ class multitrackPlayer extends HTMLElement{
             x += barWidth + 1;
         }
 
+        //Mute Colors
 
+        for(var i = 0; i < this.canvas.track.length; i++){
+            var muteLabel = this.shadow.getElementById('muteLabel_' + i);
+            if (this.canvas.track[i].muted) muteLabel.style.backgroundColor = 'rgb(' + (150) + ',' + (150) + ',' + (150) + ')';
+            else muteLabel.style.backgroundColor = 'rgb(' + (this.colors.tracks[i].mute[0]) + ',' + (this.colors.tracks[i].mute[1]) + ',' + (this.colors.tracks[i].mute[2]) + ')';
+        }
 
         //Track Meters
         for(var i = 0; i < this.canvas.track.length; i++){
@@ -892,14 +923,14 @@ class multitrackPlayer extends HTMLElement{
 
     openTab(evt, tabName) {
         var i, tabcontent, tablinks;
-        var switcher = this.shadow.getElementById(tabName+'Div').style.display == "block" ? true : false;
+        var switcher = this.shadow.getElementById(tabName+'Div').style.display == "flex" ? true : false;
         tabcontent = this.shadowRoot.querySelectorAll(".tabcontent");
         for (i = 0; i < tabcontent.length; i++) {
             tabcontent[i].style.display = "none";
         }
         tablinks = this.shadowRoot.querySelectorAll(".tablinks");    
         if(switcher) this.shadow.getElementById(tabName+'Div').style.display = "none"
-        else this.shadow.getElementById(tabName+'Div').style.display = "block";
+        else this.shadow.getElementById(tabName+'Div').style.display = "flex";
     }
 
     //Callbacks for buttons
@@ -980,7 +1011,7 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('volumeSlider').addEventListener('change', function() {
             self.gain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
             var label = self.shadow.getElementById("volume-value");
-            label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB gain";
+            label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
         });
         this.shadowRoot.getElementById('lp').addEventListener('change', function() {
             self.lp.frequency.setValueAtTime(this.value, self.audioContext.currentTime);
