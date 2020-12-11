@@ -514,6 +514,7 @@ class multitrackPlayer extends HTMLElement{
             lbl.appendChild(spn);
             lbl.id = "muteLabel_" + i;
             lbl.style.margin = '0px';
+            lbl.style.font = this.font;
             
             //lbl.style.display = "inline-block";
             //lbl.style.height = self.canvas.meterHeight + "px";
