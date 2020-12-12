@@ -17,8 +17,7 @@ template.innerHTML =
             </div>
             <div id="master">
             </div>
-        </div>
-            
+        </div>    
         <div id="sotto" class="row">
             <div id="transport" class="col-md-6">
                     <button id="btn-np-backward">BW</button>
@@ -35,6 +34,9 @@ template.innerHTML =
             <div id="parameters" class="col-md-4">
                 <button class="tablinks" id="filter">filter</button>
                 <button class="tablinks" id="equalizer">equalizer</button>
+                <button class="tablinks" id="compressor">compressor</button>
+                <button class="tablinks" id="limiter">limiter</button>
+                <button class="tablinks" id="preGain">pre gain</button>
             </div>
         </div>
         <div id="piuSotto" class="row">
@@ -53,28 +55,62 @@ template.innerHTML =
             </div>
             <div class="tabcontent" id="equalizerDiv" class="col-md-8">
                 
+    
+            </div>
+            <div class="tabcontent" id="compressorDiv">
+                <div>
+                    <input id="compEnabled" type="checkbox">Enabled</input>
+                </div>
+                <div>
+                    <input id="threshold" type="range" min="-90" max="0" value="0" step="0.01">threshold</input>
+                    <p id="threshold-value">0dB</p>
+                </div>
+                <div>
+                    <input id="ratio" type="range" min="1" max="48" value="1" step="0.01">ratio</input>
+                    <p id="ratio-value">1 : 1</p>
+                </div>
+                <div>
+                    <input id="attack" type="range" min="0" max="50" value="10" step="0.01">attack</input>
+                    <p id="attack-value">10ms</p>
+                </div>
+                <div>
+                    <input id="release" type="range" min="0" max="50" value="10" step="0.01">release</input>
+                    <p id="release-value">10ms</p>
+                </div>
+            </div>
+            <div class="tabcontent" id="limiterDiv">
+                <div>
+                    <input id="limEnabled" type="checkbox">Enabled</input>
+                </div>
+                <div>
+                    <input id="lim_threshold" type="range" min="-90" max="0" value="0" step="0.01">threshold</input>
+                    <p id="lim_threshold-value">0dB</p>
+                </div>
+                <div>
+                    <input id="lim_attack" type="range" min="0" max="50" value="10" step="0.01">attack</input>
+                    <p id="lim_attack-value">10ms</p>
+                </div>
+                <div>
+                    <input id="lim_release" type="range" min="0" max="50" value="10" step="0.01">release</input>
+                    <p id="lim_release-value">10ms</p>
+                </div>
+            </div>
+            <div class="tabcontent" id="preGainDiv">
+                <div>
+                    <input id="preGainSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">
+                    <p id="preGain-value">0dB</p>
+                </div>
             </div>
         </div>
     </div>
-    
 </div>
 </html>
 `
 
 /*
 
-            <button class="tablinks" id="compressor">compressor</button>
 
-            <div class="tabcontent" id="compressorDiv">
-                <p>threshold</p><p id="threshold-value">0dB</p>
-                <input id="threshold" type="range" min="-90" max="0" value="0" step="0.01">
-                <p>ratio</p> <p id="ratio-value">1 : 1</p>
-                <input id="ratio" type="range" min="1" max="48" value="1" step="0.01">
-                <p>attack</p><p id="attack-value">10ms</p>
-                <input id="attack" type="range" min="0" max="50" value="10" step="0.01">
-                <p>release</p><p id="release-value">10ms</p>
-                <input id="release" type="range" min="0" max="50" value="10" step="0.01">
-            </div>
+         
 */
 
 
@@ -84,12 +120,30 @@ class multitrackPlayer extends HTMLElement{
     constructor(){
         super();
         this._authorized = this.getAttribute('auth');
+        this._isOwner = this.getAttribute('isOwner');
+
+        console.log(this._isOwner);
         
         //Add template html
         this.attachShadow({ mode: 'open'});
         this.shadowRoot.appendChild(template.content.cloneNode(true));
         this.shadow = this.shadowRoot;
         
+        var compBtn = this.shadowRoot.getElementById("compressor");
+        var limBtn = this.shadowRoot.getElementById("limiter");
+        var gainBtn = this.shadowRoot.getElementById("preGain");
+
+        if(this._isOwner == 'true'){
+            compBtn.style.display = "block";
+            limBtn.style.display = "block";
+            gainBtn.style.display = "block";
+        }
+        else{
+            compBtn.style.display = "none";
+            limBtn.style.display = "none";
+            gainBtn.style.display = "none";
+        }
+
         //Close all param tabs
         var tabcontent = this.shadowRoot.querySelectorAll(".tabcontent");
         for (var i = 0; i < tabcontent.length; i++) {
@@ -118,8 +172,7 @@ class multitrackPlayer extends HTMLElement{
         console.log(this.canvas.waveWidth + this.canvas.meterWidth);
         //this.canvasWidth = this.shadowRoot.querySelector('#ui').scrollWidth * 
         //this.canvasHeight = this.shadowRoot.querySelector('#ui').scrollWidth * this.widthMulti * this.heightMulti;
-        
-
+    
         //Create audio context
         var AudioContext = window.AudioContext || window.webkitAudioContext || false;
         if (AudioContext){
@@ -164,16 +217,48 @@ class multitrackPlayer extends HTMLElement{
 
         this.font = this.getAttribute('font');
 
-
         //dB to amplitude ratio =>   ratio=10^(dB)/10)
         //amplitude ratio to dB =>   dB=10*log10(ratio) 
         this.preGainValue = Math.pow(10 , (this.getAttribute('preGain') / 10));
 
         this.compressore = {};
-        this.compressore.ratio = this.getAttribute('ratio');
-        this.compressore.attack = this.getAttribute('attack');
-        this.compressore.release = this.getAttribute('release');
-        this.compressore.threshold = this.getAttribute('threshold');
+        this.compressore.enabled = this.getAttribute('comp_enabled');
+        this.compressore.ratio = this.getAttribute('comp_ratio');
+        this.compressore.attack = this.getAttribute('comp_attack');
+        this.compressore.release = this.getAttribute('comp_release');
+        this.compressore.threshold = this.getAttribute('comp_threshold');
+
+        this.limiterParameters = {};
+        this.limiterParameters.enabled = this.getAttribute('lim_enabled');
+        this.limiterParameters.attack = this.getAttribute('lim_attack');
+        this.limiterParameters.release = this.getAttribute('lim_release');
+        this.limiterParameters.threshold = this.getAttribute('lim_threshold');
+
+        if(this.compressore.enabled == 'true' && this._isOwner == 'true'){
+            this.shadow.getElementById('compEnabled').checked = true;
+            this.shadow.getElementById('ratio').value = this.compressore.ratio;
+            this.shadow.getElementById('attack').value = this.compressore.attack;
+            this.shadow.getElementById('release').value = this.compressore.release;
+            this.shadow.getElementById('threshold').value = this.compressore.threshold;
+            self.shadow.getElementById("threshold-value").innerHTML = this.shadow.getElementById('ratio').value + "dB";
+            self.shadow.getElementById("ratio-value").innerHTML = this.shadow.getElementById('attack').value + " : 1";
+            self.shadow.getElementById("attack-value").innerHTML = this.shadow.getElementById('release').value + "ms";
+            self.shadow.getElementById("release-value").innerHTML = this.shadow.getElementById('threshold').value + "ms";
+        } 
+        if(this.limiterParameters.enabled == 'true' && this._isOwner == 'true'){
+            this.shadow.getElementById('limEnabled').checked = true;
+            this.shadow.getElementById('lim_attack').value = this.limiterParameters.attack;
+            this.shadow.getElementById('lim_release').value = this.limiterParameters.release;
+            this.shadow.getElementById('lim_threshold').value = this.limiterParameters.threshold;
+            self.shadow.getElementById("lim_attack-value").innerHTML = this.shadow.getElementById('lim_attack').value + "ms";
+            self.shadow.getElementById("lim_release-value").innerHTML = this.shadow.getElementById('lim_release').value + "ms";
+            self.shadow.getElementById("lim_threshold-value").innerHTML = this.shadow.getElementById('lim_threshold').value + "dB";
+        }
+
+        if(this._isOwner == 'true'){
+            this.shadow.getElementById('preGainSlider').value = this.preGainValue;
+            self.shadow.getElementById("preGain-value").innerHTML = (10 * Math.log10(this.shadow.getElementById('preGainSlider').value)).toFixed(1) + "dB";
+        }
 
         //Create initial audio nodes chain
         this.createAudioNodes();
@@ -212,11 +297,24 @@ class multitrackPlayer extends HTMLElement{
         this.hp = this.audioContext.createBiquadFilter();                          //hipass filter
         this.hp.type = "highpass";
         this.hp.frequency.setValueAtTime(20, this.audioContext.currentTime);
+
         this.compressor = new Array(this.audioContext.destination.channelCount);   //create array of mono compressors since each node can't handle more than 2 channels
-        for(var i = 0; i < this.audioContext.destination.channelCount; i++){
-            this.compressor[i] = this.audioContext.createDynamicsCompressor();
-            this.compressor[i].channelCountMode = "explicit";
-            this.compressor[i].channelCount = 1;
+        if(this.compressore.enabled == 'true'){
+            for(var i = 0; i < this.audioContext.destination.channelCount; i++){
+                this.compressor[i] = this.audioContext.createDynamicsCompressor();
+                this.compressor[i].channelCountMode = "explicit";
+                this.compressor[i].channelCount = 1;
+            }
+        }
+
+        this.limiter = new Array(this.audioContext.destination.channelCount);   //create array of mono compressors since each node can't handle more than 2 channels
+        if(this.limiterParameters.enabled == 'true'){
+            for(var i = 0; i < this.audioContext.destination.channelCount; i++){
+                this.limiter[i] = this.audioContext.createDynamicsCompressor();
+                this.limiter[i].ratio.setValueAtTime("100", this.audioContext.currentTime);
+                this.limiter[i].channelCountMode = "explicit";
+                this.limiter[i].channelCount = 1;
+            }
         }
         this.analyser = this.audioContext.createAnalyser();
         this.analyser.minDecibel = -80;
@@ -307,19 +405,96 @@ class multitrackPlayer extends HTMLElement{
         this.gain.channelCount = this.audioContext.destination.channelCount;
         this.lp.channelCount = this.audioContext.destination.channelCount;
         this.compressor = new Array(this.audioContext.destination.channelCount);
-        for(var i = 0; i < this.audioContext.destination.channelCount; i++){
-            this.compressor[i] = this.audioContext.createDynamicsCompressor();
-            this.compressor[i].channelCountMode = "explicit";
-            this.compressor[i].channelCount = 1;
+        this.limiter = new Array(this.audioContext.destination.channelCount);
 
-            this.compressor[i].ratio.setValueAtTime(this.compressore.ratio, this.audioContext.currentTime);
-            this.compressor[i].threshold.setValueAtTime(this.compressore.threshold, this.audioContext.currentTime);
-            this.compressor[i].attack.setValueAtTime(this.compressore.attack, this.audioContext.currentTime);
-            this.compressor[i].release.setValueAtTime(this.compressore.release, this.audioContext.currentTime);
-
+        console.log("compressore: " + this.compressore.enabled);
+        if(this.compressore.enabled == 'true'){
+            console.log("qui!");
+            for(var i = 0; i < this.audioContext.destination.channelCount; i++){
+                this.compressor[i] = this.audioContext.createDynamicsCompressor();
+                this.compressor[i].channelCountMode = "explicit";
+                this.compressor[i].channelCount = 1;
+                this.compressor[i].ratio.setValueAtTime(this.compressore.ratio, this.audioContext.currentTime);
+                this.compressor[i].threshold.setValueAtTime(this.compressore.threshold, this.audioContext.currentTime);
+                this.compressor[i].attack.setValueAtTime(this.compressore.attack, this.audioContext.currentTime);
+                this.compressor[i].release.setValueAtTime(this.compressore.release, this.audioContext.currentTime);
+            }
         }
+        if(this.limiterParameters.enabled == 'true'){
+            for(var i = 0; i < this.audioContext.destination.channelCount; i++){
+                this.limiter[i] = this.audioContext.createDynamicsCompressor();
+                this.limiter[i].ratio.setValueAtTime("100", this.audioContext.currentTime);
+                this.limiter[i].channelCountMode = "explicit";
+                this.limiter[i].channelCount = 1;
+                this.limiter[i].threshold.setValueAtTime(this.limiterParameters.threshold, this.audioContext.currentTime);
+                this.limiter[i].attack.setValueAtTime(this.limiterParameters.attack, this.audioContext.currentTime);
+                this.limiter[i].release.setValueAtTime(this.limiterParameters.release, this.audioContext.currentTime);
+            }
+        }
+
+        this.updateOutput();
+
+            
+        
     }
 
+    updateOutput(){
+        this.eq[this.eq.length - 1].disconnect();
+        this.postComp = null;
+        this.postLim = null;
+        this.splitComp = null;
+        this.mergeComp = null;
+        this.splitLim = null;
+        this.mergeLim = null;
+        if(this.audioContext.destination.channelCount > 2){   //Connect multichannel eq out to single channel compressors and merge output in a single post-compression multichannel signal
+
+            this.splitComp = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
+            this.mergeComp = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
+            this.eq[this.eq.length - 1].connect(this.splitComp);
+            if(this.compressore.enabled){
+                for(var c = 0; c < this.compressor.length; c++){
+                    this.splitComp.connect(this.compressor[c], c, 0);
+                    this.compressor[c].connect(this.mergeComp[c], 0, c);
+                }
+            }
+            else this.splitComp.connect(this.mergeComp); 
+            
+            this.splitLim = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
+            this.mergeLim = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
+            this.mergeComp.connect(this.splitLim);
+            if(this.limiterParameters.enabled){
+                for(var c = 0; c < this.limiter.length; c++){
+                    this.splitLim.connect(this.limiter[c], c, 0);
+                    this.limiter[c].connect(this.mergeLim[c], 0, c);
+                }
+            }
+            else this.splitLim.connect(this.mergeLim); 
+            
+            this.mergeLim.connect(this.gain);
+            
+        }
+        else{  //Connect stereo eq out to stereo compressor
+            this.postComp = this.audioContext.createGain();
+            this.postLim = this.audioContext.createGain();
+            this.postComp.channelCount = 2;
+            this.postLim.channelCount = 2;
+            
+            if(this.compressore.enabled == 'true'){
+                this.compressor[0].channelCount = 2;
+                this.eq[this.eq.length - 1].connect(this.compressor[0]);
+                this.compressor[0].connect(this.postComp);
+            }
+            else this.eq[this.eq.length - 1].connect(this.postComp);
+
+            if(this.limiterParameters.enabled == 'true'){
+                this.limiter[0].channelCount = 2;
+                this.postComp.connect(this.limiter[0]);
+                this.limiter[0].connect(this.postLim);
+            }
+            else this.postComp.connect(this.postLim);
+            this.postLim.connect(this.gain);
+        }
+    }
 
     displayAndConnect(){
         var tracksDiv = this.shadow.getElementById('tracks');
@@ -358,27 +533,11 @@ class multitrackPlayer extends HTMLElement{
         this.lp.connect(this.hp);                  //Connect nodes
         this.hp.connect(this.eq[0]);               //Connect hipass to first peaking eq
         for(var i = 0; i < this.eq.length; i++){   
-            if(i == this.eq.length - 1){          
-                if(this.audioContext.destination.channelCount > 2){   //Connect multichannel eq out to single channel compressors and merge output in a single post-compression multichannel signal
-                    //console.log("total compressor number: " + this.compressor.length);
-                    this.splitComp = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
-                    this.mergeComp = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
-                    this.eq[i].connect(this.splitComp);
-                    for(var c = 0; c < this.compressor.length; c++){
-                        this.splitComp.connect(this.compressor[c], c, 0);
-                        this.compressor[c].connect(this.mergeComp, 0, c);
-                    }
-                    this.mergeComp.connect(this.gain);
-                }
-                else{  //Connect stereo eq out to stereo compressor
-                    this.compressor[0].channelCount = 2;
-                    this.eq[i].connect(this.compressor[0]);
-                    this.compressor[0].connect(this.gain);
-                }
+            if(i == this.eq.length - 1){ 
             }
             else this.eq[i].connect(this.eq[i + 1]);   //Connect eq in series
         }
-
+        this.updateOutput();
         if(this._authorized === 'true'){        //If the user is authorized connect multichannel out
             this.gain.connect(this.audioContext.destination);
         } 
@@ -405,7 +564,8 @@ class multitrackPlayer extends HTMLElement{
         //console.log("merger: " + this.routesMerger.channelCount);
         console.log("lp: " + this.lp.channelCount);
         console.log("eq: " + this.eq[0].channelCount);
-        console.log("compressor: " + this.compressor[0].channelCount);
+        if(this.compressore.enabled == 'true')  console.log("compressor: " + this.compressor[0].channelCount);
+        if(this.limiterParameters.enabled == 'true')  console.log("limiter: " + this.limiter[0].channelCount);
         //console.log("compressor: " + this.compressor[1].channelCount);
         console.log("gain: " + this.gain.channelCount);
         console.log("destination: " + this.audioContext.destination.channelCount);
@@ -1048,40 +1208,100 @@ class multitrackPlayer extends HTMLElement{
             var label = self.shadow.getElementById("hp-value");
             label.innerHTML = this.value + "Hz";
         });
-        /*
-        this.shadowRoot.getElementById('threshold').addEventListener('change', function() {
-            var n =  self.audioContext.currentTime;
-            for(var c = 0; c < self.compressor.length; c++){
-                self.compressor[c].threshold.setValueAtTime(this.value, n);
-            }
-            var label = self.shadow.getElementById("threshold-value");
-            label.innerHTML = this.value + "dB";
-        });
-        this.shadowRoot.getElementById('ratio').addEventListener('change', function() {
-            var n =  self.audioContext.currentTime;
-            for(var c = 0; c < self.compressor.length; c++){
-                self.compressor[c].ratio.setValueAtTime(this.value, n);
-            }
-            var label = self.shadow.getElementById("ratio-value");
-            label.innerHTML = this.value + " : 1";
-        });
-        this.shadowRoot.getElementById('attack').addEventListener('change', function() {
-            var n =  self.audioContext.currentTime;
-            for(var c = 0; c < self.compressor.length; c++){
-                self.compressor[c].attack.setValueAtTime(this.value, n);
-            }
-            var label = self.shadow.getElementById("attack-value");
-            label.innerHTML = this.value + "ms";
-        });
-        this.shadowRoot.getElementById('release').addEventListener('change', function() {
-            var n =  self.audioContext.currentTime;
-            for(var c = 0; c < self.compressor.length; c++){
-                self.compressor[c].release.setValueAtTime(this.value, n);
-            }
-            var label = self.shadow.getElementById("release-value");
-            label.innerHTML = this.value + "ms";
-        });
-        */
+        
+        if(this._isOwner == 'true'){
+            this.shadowRoot.getElementById('preGain').addEventListener('click', function(e){
+                self.openTab(e, this.id);
+            });
+            this.shadowRoot.getElementById('preGainSlider').addEventListener('change', function() {
+                self.preGainValue = this.value;
+                self.preGain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
+                var label = self.shadow.getElementById("preGain-value");
+                label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
+            });
+            this.shadowRoot.getElementById('compEnabled').addEventListener('click', function(){
+                self.compressore.enabled = this.checked ? 'true' : 'false'; 
+                self.updateChannels();
+            });
+            this.shadowRoot.getElementById('compressor').addEventListener('click', function(e){
+                self.openTab(e, this.id);
+            });
+            this.shadowRoot.getElementById('threshold').addEventListener('change', function() {
+                self.compressore.threshold = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].threshold.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("threshold-value");
+                label.innerHTML = this.value + "dB";
+            });
+            this.shadowRoot.getElementById('ratio').addEventListener('change', function() {
+                self.compressore.ratio = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].ratio.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("ratio-value");
+                label.innerHTML = this.value + " : 1";
+            });
+            this.shadowRoot.getElementById('attack').addEventListener('change', function() {
+                self.compressore.attack = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].attack.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("attack-value");
+                label.innerHTML = this.value + "ms";
+            });
+            this.shadowRoot.getElementById('release').addEventListener('change', function() {
+                self.compressore.release = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].release.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("release-value");
+                label.innerHTML = this.value + "ms";
+            });
+
+            //LIMITER
+
+            this.shadowRoot.getElementById('limEnabled').addEventListener('click', function(){
+                self.limiterParameters.enabled = this.checked ? 'true' : 'false'; 
+                self.updateChannels();
+            });
+
+            this.shadowRoot.getElementById('limiter').addEventListener('click', function(e){
+                self.openTab(e, this.id);
+            });
+
+            this.shadowRoot.getElementById('lim_threshold').addEventListener('change', function() {
+                self.limiterParameters.threshold = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.limiter.length; c++){
+                    self.limiter[c].threshold.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("lim_threshold-value");
+                label.innerHTML = this.value + "dB";
+            });
+            this.shadowRoot.getElementById('lim_attack').addEventListener('change', function() {
+                self.limiterParameters.attack = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.limiter.length; c++){
+                    self.limiter[c].attack.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("lim_attack-value");
+                label.innerHTML = this.value + "ms";
+            });
+            this.shadowRoot.getElementById('lim_release').addEventListener('change', function() {
+                self.limiterParameters.release = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.limiter.length; c++){
+                    self.limiter[c].release.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("lim_release-value");
+                label.innerHTML = this.value + "ms";
+            });
+        }
         this.shadow.getElementById("ui").addEventListener('click', function(e){
             var bound = this.getBoundingClientRect();
             if(e.clientY < self.canvas.waveHeight / 2){

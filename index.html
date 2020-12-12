@@ -13,6 +13,7 @@
                 <script src="/player/volumeMeter.js"></script>
                 <multitrack-player 
                 auth="true" 
+                isOwner="true"
                 file="./assets/2channel.wav" 
                 encoding="5.1" 
                 layout="L,C,R,LS,RS,LFE" 
@@ -32,10 +33,15 @@
                 mutedClippingRGB="120,120,120"
                 unmutedRGB="0,255,0"
                 unmutedClippingRGB="255,0,0"
-                ratio="20"
-                threshold="-10.0"
-                attack="0.1"
-                release="0.1"
+                comp_enabled="false"
+                comp_ratio="10"
+                comp_threshold="-80.0"
+                comp_attack="0.1"
+                comp_release="0.1"
+                lim_enabled="false"
+                lim_threshold="0.0"
+                lim_attack="0.5"
+                lim_release="0.1"
                 font="20px Comic Sans MS"
                 ></multitrack-player>
             </div>

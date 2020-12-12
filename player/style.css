@@ -34,19 +34,13 @@
 
     top: 20px;
 }
-
-#equalizerDiv {
+#piuSotto > div{
+    
     margin-left: 5%;
 }
-#equalizerDiv > div {
-    position: relative;
-    margin: 10%;
-}
-#filterDiv  {
-    margin-left: 5%;
-}
-
-#filterDiv > div {
+#piuSotto > div > div{
+    
     position: relative;
     margin: 1%;
 }
+
