@@ -192,7 +192,8 @@ class multitrackPlayer extends HTMLElement{
         this.currentBuffer = null;
         this.loop = false;
         this.isPlaying = false;
-        this.restartPoint = null;
+        this.restartPoint = 0;
+        this.playheadPosition = 0;
         this.startPoint = 0;
         this.endPoint = 1;
         this.startPosition = 0;
@@ -431,11 +432,7 @@ class multitrackPlayer extends HTMLElement{
                 this.limiter[i].release.setValueAtTime(this.limiterParameters.release, this.audioContext.currentTime);
             }
         }
-
-        this.updateOutput();
-
-            
-        
+        this.updateOutput();        
     }
 
     updateOutput(){
@@ -447,7 +444,6 @@ class multitrackPlayer extends HTMLElement{
         this.splitLim = null;
         this.mergeLim = null;
         if(this.audioContext.destination.channelCount > 2){   //Connect multichannel eq out to single channel compressors and merge output in a single post-compression multichannel signal
-
             this.splitComp = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
             this.mergeComp = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
             this.eq[this.eq.length - 1].connect(this.splitComp);
