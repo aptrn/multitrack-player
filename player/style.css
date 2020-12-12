@@ -13,6 +13,10 @@
     top: 20px;
 }
 
+#analysers {
+    margin-top: 5px;
+}
+
 .mute-name {
     background-color: palevioletred;
 }

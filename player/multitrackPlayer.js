@@ -14,9 +14,6 @@ template.innerHTML =
             </div>
     
             <div id="analysers" class="row-no-space" style="display:flex;">
-                
-             
-                
             </div>
             <div id="master">
             </div>
@@ -46,11 +43,11 @@ template.innerHTML =
                     <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">Rotation</input>
                 </div>
                 <div>
-                    <input id="lp" type="range" min="15000" max="20000" value="19999" step="1">Low Pass Filter</input>
+                    <input id="lp" type="range" min="20" max="20000" value="19999" step="1">Low Pass Filter</input>
                     <p id="lp-value">20000Hz</p>
                 </div>
                 <div>
-                    <input id="hp" type="range" min="20" max="300" value="20" step="1">High Pass Filter</input>
+                    <input id="hp" type="range" min="20" max="20000" value="20" step="1">High Pass Filter</input>
                     <p id="hp-value">20Hz</p>
                 </div>
             </div>
@@ -155,6 +152,8 @@ class multitrackPlayer extends HTMLElement{
         this.colors.waveformBackground = this.getAttribute('waveformBackground').split(',');
         this.colors.analyzer = this.getAttribute('analyzerRGB').split(',');
         this.colors.analyzerBackground = this.getAttribute('analyzerBackground').split(',');
+        this.colors.analyserStyle = this.getAttribute('analyzerStyle');
+        this.colors.analyserSize = this.getAttribute('analyzerFFTSize');
         this.colors.uiColor = this.getAttribute('uiRGB').split(',');
         this.colors.textColor = this.getAttribute('textRGB').split(',');
         this.colors.meter = {};
@@ -220,10 +219,10 @@ class multitrackPlayer extends HTMLElement{
             this.compressor[i].channelCount = 1;
         }
         this.analyser = this.audioContext.createAnalyser();
-        this.analyser.fftSize = 256;
-        this.analyserbufferLength = this.analyser.frequencyBinCount;
-        this.analyserDataArray = new Uint8Array(this.analyserbufferLength);  
-
+        this.analyser.minDecibel = -80;
+        this.analyser.maxDecibel = 0;
+        this.analyser.channelCount = 1;
+        this.analyser.fftSize = this.colors.analyserSize;
     };
     
     createEq(){
@@ -343,9 +342,6 @@ class multitrackPlayer extends HTMLElement{
             this.canvas.track[i].meter = this.createCanvas("trackMeter", i, this.canvas.meterWidth, this.canvas.meterHeight); //meter
         }
         this.canvas.ui = this.createCanvas("ui", 0, this.canvas.waveWidth, this.canvas.waveHeight); //playehead
-        this.canvas.analyserWidth += this.shadow.getElementById('muteLabel_' + 0).scrollWidth;
-        //console.log(this.canvas.analyserWidth + "/" + (this.canvas.waveWidth + this.canvas.meterWidth + this.shadow.getElementById('muteLabel_' + 0).scrollWidth));
-        this.canvas.analyser = this.createCanvas("analyser", 0, this.canvas.analyserWidth, this.canvas.analyserHeight); //spectrum
         this.canvas.master = this.createCanvas("masterMeter", 0, this.canvas.meterWidth, this.canvas.meterHeight); //master meters
        
         //Calculate starting points and duration
@@ -355,6 +351,10 @@ class multitrackPlayer extends HTMLElement{
 
         this.displayFileInfo();        //Inject title and duration into HTML
         multitrackPlayer.displayBuffer(this, this.analyzeData(this.source.buffer)); //Analyze buffer samples and draw them into first canvas
+        this.canvas.analyserWidth += this.shadow.getElementById('muteLabel_' + 0).scrollWidth;
+        //console.log(this.canvas.analyserWidth + "/" + (this.canvas.waveWidth + this.canvas.meterWidth + this.shadow.getElementById('muteLabel_' + 0).scrollWidth));
+        this.canvas.analyser = this.createCanvas("analyser", 0, this.canvas.analyserWidth, this.canvas.analyserHeight); //spectrum
+        
         this.lp.connect(this.hp);                  //Connect nodes
         this.hp.connect(this.eq[0]);               //Connect hipass to first peaking eq
         for(var i = 0; i < this.eq.length; i++){   
@@ -379,18 +379,20 @@ class multitrackPlayer extends HTMLElement{
             else this.eq[i].connect(this.eq[i + 1]);   //Connect eq in series
         }
 
-        console.log(this.gain.channelCount);
-        
         if(this._authorized === 'true'){        //If the user is authorized connect multichannel out
             this.gain.connect(this.audioContext.destination);
-            this.gain.connect(this.analyser);
         } 
         else{                                   //If the user is not authorized merge to mono and connect to speakers
             this.monoMerge = this.audioContext.createChannelMerger(1);
             this.gain.connect(this.monoMerge);
             this.monoMerge.connect(this.audioContext.destination, 0, 0);
-            this.monoMerge.connect(this.analyser);
         }
+        this.analyserMonoMerge = this.audioContext.createChannelMerger(1);
+        this.analyserGainControl = this.audioContext.createGain();
+        this.analyserGainControl.gain.setValueAtTime(1.0 / this.source.buffer.numberOfChannels, this.audioContext.currentTime);
+        this.gain.connect(this.analyserGainControl);
+        this.analyserGainControl.connect(this.analyserMonoMerge);
+        this.analyserMonoMerge.connect(this.analyser);
 
         this.addCallbacks();    //Adds UI callbacks
 
@@ -802,21 +804,43 @@ class multitrackPlayer extends HTMLElement{
 
 
         //FREQ ANALYSER
+
+        
+        
+        var freqData = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(freqData);      
+        var scaling = this.canvas.analyserHeight / 256;
+        var space = (this.canvas.analyserWidth * (this.source.buffer.numberOfChannels + 1))/ freqData.length;
+        var xPos = 0;
         
         this.canvas.analyser.clearRect(0,0, this.canvas.analyserWidth, this.canvas.analyserHeight);
-
+        
         this.canvas.analyser.fillStyle =  'rgb(' + this.colors.analyzerBackground[0] + ',' + this.colors.analyzerBackground[1] + ',' + this.colors.analyzerBackground[2]  + ')';
         this.canvas.analyser.fillRect(0, 0, this.canvas.analyserWidth, this.canvas.analyserHeight);
         
-        var barWidth = (this.canvas.analyserWidth / this.analyserbufferLength) * 2.5;
-        var barHeight; 
-        var x = 0;
-        this.analyser.getByteFrequencyData(this.analyserDataArray);
-        for(var i = 0; i < this.analyserbufferLength; i++) {
-            barHeight = this.analyserDataArray[i]/2;
-            this.canvas.analyser.fillStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
-            this.canvas.analyser.fillRect(x, this.canvas.analyserHeight - barHeight / 2, barWidth, barHeight);
-            x += barWidth + 1;
+        this.canvas.analyser.strokeStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
+        this.canvas.analyser.fillStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
+        
+        if (this.colors.analyserStyle == "bars"){
+            for (var x = 0; x < this.canvas.analyserWidth; x++){
+                xPos = x * space;
+                var barHeight = freqData[x] * scaling;
+                this.canvas.analyser.fillRect(xPos, this.canvas.analyserHeight - barHeight, space, barHeight);
+             }
+        }
+        else if (this.colors.analyserStyle == "line"){
+            this.canvas.analyser.lineWidth = 2;
+            this.canvas.analyser.beginPath();
+            this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight);
+            for (var x = 0; x < this.canvas.analyserWidth; x++){
+                xPos = x * space;
+                var barHeight = freqData[x] * scaling;
+                this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight - barHeight);
+            }
+            this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight);
+            this.canvas.analyser.lineTo(0, this.canvas.analyserHeight);
+            this.canvas.analyser.stroke();
+            this.canvas.analyser.fill();
         }
 
         //Mute Colors
