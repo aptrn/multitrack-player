@@ -27,6 +27,10 @@ template.innerHTML =
                     <button id="btn-np-forward">FW</button>
                     <input id="btn-np-loop" type="checkbox">loop</input>
             </div>
+            <div id="rotationDiv" class="col-md-2">
+                <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01"></input>
+                <p id="rotLab"></p>
+            </div>
             <div id="volumeDiv" class="col-md-2">
                 <input id="volumeSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">
                 <p id="volume-value">0dB</p>
@@ -41,9 +45,6 @@ template.innerHTML =
         </div>
         <div id="piuSotto" class="row">
             <div class="tabcontent" id="filterDiv" class="col-md-8">
-                <div>
-                    <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01">Rotation</input>
-                </div>
                 <div>
                     <input id="lp" type="range" min="20" max="20000" value="19999" step="1">Low Pass Filter</input>
                     <p id="lp-value">20000Hz</p>
@@ -168,8 +169,9 @@ class multitrackPlayer extends HTMLElement{
         this.canvas.analyserWidth = this.canvas.waveWidth + this.canvas.meterWidth;
         this.canvas.analyserHeight =  this.canvas.waveHeight / 6;
 
-        console.log(this.canvas.analyserWidth);
-        console.log(this.canvas.waveWidth + this.canvas.meterWidth);
+        //console.log(this.canvas.analyserWidth);
+        //console.log(this.canvas.waveWidth + this.canvas.meterWidth);
+
         //this.canvasWidth = this.shadowRoot.querySelector('#ui').scrollWidth * 
         //this.canvasHeight = this.shadowRoot.querySelector('#ui').scrollWidth * this.widthMulti * this.heightMulti;
     
@@ -251,14 +253,14 @@ class multitrackPlayer extends HTMLElement{
             this.shadow.getElementById('lim_attack').value = this.limiterParameters.attack;
             this.shadow.getElementById('lim_release').value = this.limiterParameters.release;
             this.shadow.getElementById('lim_threshold').value = this.limiterParameters.threshold;
-            self.shadow.getElementById("lim_attack-value").innerHTML = this.shadow.getElementById('lim_attack').value + "ms";
-            self.shadow.getElementById("lim_release-value").innerHTML = this.shadow.getElementById('lim_release').value + "ms";
-            self.shadow.getElementById("lim_threshold-value").innerHTML = this.shadow.getElementById('lim_threshold').value + "dB";
+            this.shadow.getElementById("lim_attack-value").innerHTML = this.shadow.getElementById('lim_attack').value + "ms";
+            this.shadow.getElementById("lim_release-value").innerHTML = this.shadow.getElementById('lim_release').value + "ms";
+            this.shadow.getElementById("lim_threshold-value").innerHTML = this.shadow.getElementById('lim_threshold').value + "dB";
         }
 
         if(this._isOwner == 'true'){
             this.shadow.getElementById('preGainSlider').value = this.preGainValue;
-            self.shadow.getElementById("preGain-value").innerHTML = (10 * Math.log10(this.shadow.getElementById('preGainSlider').value)).toFixed(1) + "dB";
+            this.shadow.getElementById("preGain-value").innerHTML = (10 * Math.log10(this.shadow.getElementById('preGainSlider').value)).toFixed(1) + "dB";
         }
 
         //Create initial audio nodes chain
@@ -267,6 +269,14 @@ class multitrackPlayer extends HTMLElement{
 
         //Load file encoding configuration from "encoding" attribute
         this.encoding = this.getAttribute('encoding');
+        var rot = this.shadow.getElementById('rotLab');
+        if(this.encoding === "MONO") rot.innerHTML = 'Pan';
+        else if(this.encoding === "MS") rot.innerHTML = 'Width';
+        else if (this.encoding === "B-Format") rot.innerHTML = 'Rotation';
+        else {
+            rot.style.display = 'none';
+            this.shadow.getElementById('rotation').style.display = 'none';
+        }
         //Load channel configuration from "layout" attribute
         var layout = this.getAttribute('layout');
         this.configuration = layout.split(',');
@@ -1187,7 +1197,6 @@ class multitrackPlayer extends HTMLElement{
                 self.gainL.gain.setValueAtTime(1 - this.value, self.audioContext.currentTime);
                 self.gainR.gain.setValueAtTime(this.value, self.audioContext.currentTime);
             }
-            console.log(this.value);
         });
         this.shadowRoot.getElementById('volumeSlider').addEventListener('change', function() {
             self.gain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
