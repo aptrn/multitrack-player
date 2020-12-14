@@ -123,7 +123,7 @@ class multitrackPlayer extends HTMLElement{
         this._authorized = this.getAttribute('auth');
         this._isOwner = this.getAttribute('isOwner');
 
-        console.log(this._isOwner);
+        //console.log(this._isOwner);
         
         //Add template html
         this.attachShadow({ mode: 'open'});
@@ -418,9 +418,9 @@ class multitrackPlayer extends HTMLElement{
         this.compressor = new Array(this.audioContext.destination.channelCount);
         this.limiter = new Array(this.audioContext.destination.channelCount);
 
-        console.log("compressore: " + this.compressore.enabled);
+        //console.log("compressore: " + this.compressore.enabled);
         if(this.compressore.enabled == 'true'){
-            console.log("qui!");
+            //console.log("qui!");
             for(var i = 0; i < this.audioContext.destination.channelCount; i++){
                 this.compressor[i] = this.audioContext.createDynamicsCompressor();
                 this.compressor[i].channelCountMode = "explicit";
@@ -1141,7 +1141,7 @@ class multitrackPlayer extends HTMLElement{
                     self.restartAt(self.restartPoint, true);
                 }
                 else{
-                    console.log(self.startPoint);
+                    //console.log(self.startPoint);
                     self.mettiPlay(self.startPoint);
                 }
                 self.restartPoint = null;
@@ -1162,16 +1162,16 @@ class multitrackPlayer extends HTMLElement{
         });
         
         this.shadowRoot.getElementById('btn-np-forward').addEventListener('click', function(){
-            console.log("FORWARD!")            
+            //console.log("FORWARD!")            
             self.restartPoint = Math.min(self.playheadPosition + 0.1, self.endPoint);
             if(self.restartPoint == self.endPoint) self.restartPoint = self.startPoint;
-            console.log(self.restartPoint);
+            //console.log(self.restartPoint);
             var isChrome = window.chrome;
             if(isChrome && self.isPlaying) self.restartChrome = true;
             self.restartAt(self.restartPoint, self.isPlaying);            
         });
         this.shadowRoot.getElementById('btn-np-backward').addEventListener('click', function(){
-            console.log("BACK!")            
+            //console.log("BACK!")            
             self.restartPoint = Math.max(self.playheadPosition - 0.1, self.startPoint);
             var isChrome = window.chrome;
             if(isChrome && self.isPlaying) self.restartChrome = true;
@@ -1309,15 +1309,23 @@ class multitrackPlayer extends HTMLElement{
         }
         this.shadow.getElementById("ui").addEventListener('click', function(e){
             var bound = this.getBoundingClientRect();
-            if(e.clientY < self.canvas.waveHeight / 2){
-                var value = e.clientX - bound.left;
+            if(e.clientY - bound.y < self.canvas.waveHeight / 2){
+                var value = e.clientX - bound.x;
                 if( value >= self.startPosition && value <= self.endPosition){
                     var isChrome = window.chrome;
-                    if(isChrome) {  
+                    if(isChrome != undefined) {  
                         if(self.isPlaying){
-                            self.restartChrome = true;
-                            self.restartPoint = multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1);
-                            self.stop();
+                            if(self.source.loop){
+                                self.restartChrome = true;
+                                self.restartPoint = multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1);
+                                self.stop();
+                                self.restartAt(multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1), true);
+                            }
+                            else {
+                                self.restartChrome = true;
+                                self.restartPoint = multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1);
+                                self.stop();
+                            }
                         } 
                         else self.restartAt(multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1), true);
                     }
