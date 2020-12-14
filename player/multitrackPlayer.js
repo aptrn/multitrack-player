@@ -27,6 +27,10 @@ template.innerHTML =
                     <button id="btn-np-forward">FW</button>
                     <input id="btn-np-loop" type="checkbox">loop</input>
             </div>
+            <div id="zoomDiv" class="col-md-2" style="display:none">
+                <input id="zoomSlider" type="range" min="0" max="1" value="0" step="0.01"></input>
+                <p id="zoom-value">0%</p>
+            </div>
             <div id="rotationDiv" class="col-md-2">
                 <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01"></input>
                 <p id="rotLab"></p>
@@ -46,11 +50,11 @@ template.innerHTML =
         <div id="piuSotto" class="row">
             <div class="tabcontent" id="filterDiv" class="col-md-8">
                 <div>
-                    <input id="lp" type="range" min="20" max="20000" value="19999" step="1">Low Pass Filter</input>
+                    <input id="lp" type="range" min="15000" max="20000" value="20000" step="1">Low Pass Filter</input>
                     <p id="lp-value">20000Hz</p>
                 </div>
                 <div>
-                    <input id="hp" type="range" min="20" max="20000" value="20" step="1">High Pass Filter</input>
+                    <input id="hp" type="range" min="20" max="300" value="20" step="1">High Pass Filter</input>
                     <p id="hp-value">20Hz</p>
                 </div>
             </div>
@@ -202,6 +206,12 @@ class multitrackPlayer extends HTMLElement{
         this.endPosition = this.canvas.waveWidth;
         this.point1 = 0;
         this.point2 = this.canvas.waveWidth;
+
+
+        this.zoom = 0;
+        this.scroll = 0;
+        this.resolution = this.getAttribute('waveformResolution');
+
 
         this.colors = {};
         this.colors.waveform = this.getAttribute('waveformRGB').split(',');
@@ -531,7 +541,17 @@ class multitrackPlayer extends HTMLElement{
         this.source.loopEnd = this.currentBuffer.duration;
 
         this.displayFileInfo();        //Inject title and duration into HTML
-        multitrackPlayer.displayBuffer(this, this.analyzeData(this.source.buffer)); //Analyze buffer samples and draw them into first canvas
+
+        this.dataToDisplay = new Array (this.source.buffer.numberOfChannels);
+        
+                                              //data,spp,scroll,width,resolution (spp = 109 ?)
+        this.dataToDisplay = this.analyzeData(this.source.buffer, this.zoom, this.scroll, Number(this.canvas.waveWidth).toFixed(0), this.resolution);
+        
+        multitrackPlayer.displayBuffer(this, this.dataToDisplay); //Analyze buffer samples and draw them into first canvas
+        
+        window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(this));     //start animation loop for drawPlayhead
+    
+        
         this.canvas.analyserWidth += this.shadow.getElementById('muteLabel_' + 0).scrollWidth;
         //console.log(this.canvas.analyserWidth + "/" + (this.canvas.waveWidth + this.canvas.meterWidth + this.shadow.getElementById('muteLabel_' + 0).scrollWidth));
         this.canvas.analyser = this.createCanvas("analyser", 0, this.canvas.analyserWidth, this.canvas.analyserHeight); //spectrum
@@ -786,36 +806,62 @@ class multitrackPlayer extends HTMLElement{
         self.gain.connect(self.masterMeter);
     }
     
-    
-    analyzeData(buff) {             //da capire, ridurre i samples per visualizzare meglio, per ora bypass
-        return buff;
+    //buffer, 16, 1 , width, 1
+    analyzeData(buff, zoom, scroll, width, resolution) {             //da capire, ridurre i samples per visualizzare meglio, per ora bypass
+        let allChannels = new Array(buff.numberOfChannels);
+        for(var c = 0; c < buff.numberOfChannels; c++){
+            var thisChannel = buff.getChannelData(c);
+
+            //DA AGGIUSTARE QUI!
+            let spp = Number(multitrackPlayer.map_range(zoom, 0, 1, thisChannel.length / width, (thisChannel.length  / 10)/ width)).toFixed(0);
+
+            //console.log("zoom: " + zoom + " sample length: " + thisChannel.length + " width: " + width + " spp: " + spp);
+            let data = new Array(width);
+            let startSample = scroll * spp;
+            let skip = Math.ceil(spp / resolution);
+
+            for(let i = 0; i < width; i++){
+                let min = 0;
+                let max = 0;
+                let pixelStartSample = startSample + (i * spp);
+
+                for(let j = 0; j < spp; j+= skip){
+                    const index = pixelStartSample + j;
+                    if (index < thisChannel.length){
+                        let val = thisChannel[index];
+                        if(val > max) max = val;
+                        else if (val < min) min = val;
+                    }
+                }
+                data[i] = [min, max];
+            }
+            allChannels[c] = data;
+        }
+        return allChannels;
     }
 
-    static displayBuffer(obj, buff) {       // Clear canvas and draw every channel of the buffer
-        var self = obj;
-        //self.context[0].save();
-
-        for(var c = 0; c < buff.numberOfChannels; c++){
+    static displayBuffer(self, data) {       // Clear canvas and draw every channel of the buffer
+          //self.context[0].save();
+        
+        for(var c = 0; c < data.length; c++){       //for each channel
             self.canvas.track[c].wave.fillStyle  = 'rgb(' + self.colors.waveformBackground[0] + ',' + self.colors.waveformBackground[1] + ',' + self.colors.waveformBackground[2]  + ')';
             self.canvas.track[c].wave.fillRect(0, 0, self.canvas.waveWidth, self.canvas.waveHeight);
-            self.canvas.track[c].wave.strokeStyle = 'rgb(' + self.colors.waveform[0] + ',' + self.colors.waveform[1] + ',' + self.colors.waveform[2]  + ')';
+            self.canvas.track[c].wave.fillStyle = 'rgb(' + self.colors.waveform[0] + ',' + self.colors.waveform[1] + ',' + self.colors.waveform[2]  + ')';
  
-            self.canvas.track[c].wave.translate(0, (self.canvas.waveHeight / buff.numberOfChannels) / 2);
-            self.canvas.track[c].wave.beginPath();
-            var thisChannel = buff.getChannelData(c);
-            for(var x = 0; x < self.canvas.waveWidth; x++){
-                var s = multitrackPlayer.map_range(x, 0, self.canvas.waveWidth, 0, thisChannel.length);
-                var y = multitrackPlayer.map_range(thisChannel[parseInt(s)], 0, 1, 1, self.canvas.waveHeight / buff.numberOfChannels);
-                self.canvas.track[c].wave.moveTo( x, 0 );
-                self.canvas.track[c].wave.lineTo( x, y );
-                self.canvas.track[c].wave.stroke();
+            let height = self.canvas.waveHeight / (data.length * 2);
+            for(var i = 0; i < self.canvas.waveWidth; i++){
+                let minPixel = data[c][i][0] * height + height;
+                let maxPixel = data[c][i][1] * height + height;
+                let pixelHeight = maxPixel - minPixel;
+
+                self.canvas.track[c].wave.fillRect(i, minPixel, 1, pixelHeight);
             }
             //self.context[0].translate(0,(self.canvas.waveHeight / buff.numberOfChannels) / 2);
         }
+        
         //self.context[0].restore();
         //console.log('done');
-        window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(self));     //start animation loop for drawPlayhead
-    }
+     }
 
     //Map value function
     static map_range(value, low1, high1, low2, high2) {
@@ -853,6 +899,7 @@ class multitrackPlayer extends HTMLElement{
     }
 
     static drawPlayhead() {
+        self = this;
         var uiDiv = this.shadow.getElementById('ui');
         var waves = this.shadow.getElementById('wave0');
         uiDiv.style.position = "absolute";
@@ -878,6 +925,7 @@ class multitrackPlayer extends HTMLElement{
         this.canvas.ui.clearRect(0,0, this.canvas.waveWidth, this.canvas.waveHeight);
         this.canvas.ui.save();
 
+        multitrackPlayer.displayBuffer(this, this.dataToDisplay);
         
         /*
         //Start/End Labels
@@ -1180,6 +1228,16 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('btn-np-loop').addEventListener('click', function() {
             self.loop = this.checked;
             self.source.loop = self.loop;
+        });
+        this.shadowRoot.getElementById('zoomSlider').addEventListener('change', function() {
+            self.zoom = this.value, self.audioContext.currentTime;
+            var label = self.shadow.getElementById("zoom-value");
+            label.innerHTML = this.value + "%";
+
+
+                                              //data,spp,scroll,width,resolution (spp = 109 ?)
+            self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+        
         });
         this.shadowRoot.getElementById('rotation').addEventListener('change', function() {
             if(self.encoding === "B-Format"){
