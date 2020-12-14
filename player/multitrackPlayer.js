@@ -739,20 +739,38 @@ class multitrackPlayer extends HTMLElement{
                 for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
                     if(self.configuration[i] === 'M'){
                         
-                        self.routeSplitter.connect(self.routes[0], i);
-                        if(self.channels > 1) self.routeSplitter.connect(self.routes[1], i);
+                        
+                        self.mid = self.audioContext.createGain();  
+                        self.mid.gain.setValueAtTime(1, self.audioContext.currentTime);
+                        
+                        self.routeSplitter.connect(self.mid, i);
+
+                        self.mid.connect(self.routes[0], i);
+                        self.mid.connect(self.routes[1 % self.channels], i);
                     }
                     else if(self.configuration[i] === 'S'){
+
+                        self.sides = new Array(2);
+
                         
+                        self.sides[0] = self.audioContext.createGain();   
                         self.nonPhaseInversion = self.audioContext.createGain();                    //create dummy gain with gain = 1
+                        self.sides[0].gain.setValueAtTime(1, self.audioContext.currentTime);
                         self.nonPhaseInversion.gain.setValueAtTime(1, self.audioContext.currentTime);
-                        self.routeSplitter.connect(self.nonPhaseInversion, i);
-                        self.nonPhaseInversion.connect(self.routes[0]);                         //attach to left
-                        
+
+                        self.sides[1] = self.audioContext.createGain();   
                         self.phaseInversion = self.audioContext.createGain();                       //create dummy gain for phase inversion with gain = -1
+                        self.sides[1].gain.setValueAtTime(1, self.audioContext.currentTime);
                         self.phaseInversion.gain.setValueAtTime(-1, self.audioContext.currentTime);
+                       
+
+                        self.routeSplitter.connect(self.nonPhaseInversion, i);
+                        self.nonPhaseInversion.connect(self.sides[0]);                         //attach non-phase inverted to sides
+                        self.sides[0].connect(self.routes[0]);                                 //attach side to left speaker
+                        
                         self.routeSplitter.connect(self.phaseInversion, i);
-                        self.phaseInversion.connect(self.routes[1 % self.channels]);                            //attach to right
+                        self.phaseInversion.connect(self.sides[1]);                            //attach pahse inverted to sides
+                        self.sides[1].connect(self.routes[1 % self.channels]);                 //attach side to right speaker
                     }   
                  }
             }
@@ -1246,9 +1264,13 @@ class multitrackPlayer extends HTMLElement{
                 self.sceneRotator.updateRotMtx();
             }
             else if (self.encoding === "MS"){
-                this.newWidth = multitrackPlayer.map_range(this.value, 0, 1, -1, 1);
-                self.nonPhaseInversion.gain.setValueAtTime(this.newWidth, self.audioContext.currentTime);
-                self.phaseInversion.gain.setValueAtTime(-this.newWidth, self.audioContext.currentTime);
+                console.log(this.value)
+
+                this.newPan = multitrackPlayer.map_range(this.value, 0, 1, 2, 0);
+
+                self.sides[0].gain.setValueAtTime(1 + (1 - this.newPan), self.audioContext.currentTime);
+                self.sides[1].gain.setValueAtTime(1 + (1 - this.newPan), self.audioContext.currentTime);
+                self.phaseInversion.gain.setValueAtTime(this.newPan - 1, self.audioContext.currentTime);
             }
             else if (self.encoding === "MONO"){
                 this.newPan = multitrackPlayer.map_range(this.value, 0, 1, -1, 1);
