@@ -231,10 +231,14 @@ class multitrackPlayer extends HTMLElement{
         this.colors.meter.unmutedClipping = this.getAttribute('unmutedClippingRGB').split(',');
 
 
+        this.colors.meterRange = this.getAttribute('meterRangeRGB').split(',');
+
         this.colors.trackBase = this.getAttribute('trackBaseRGB').split(',');
         this.colors.trackAugment = this.getAttribute('trackAugmentRGB').split(',');
         this.colors.trackRandomness = this.getAttribute('trackRandomnessRGB').split(',');
-        this.colors.trackMuteDifference = this.getAttribute('trackMuteDiffenceRGB').split(',');
+        this.colors.trackMuteBase = this.getAttribute('trackMuteBaseRGB').split(',');
+        this.colors.trackMuteOriginal = this.getAttribute('trackMuteOriginalRGB').split(',');
+
         this.font = this.getAttribute('font');
 
         //dB to amplitude ratio =>   ratio=10^(dB)/10)
@@ -528,7 +532,7 @@ class multitrackPlayer extends HTMLElement{
             this.colors.tracks[i].muted = new Array(3);
             for (var k = 0; k < this.colors.tracks[i].unmuted.length; k++){
                 this.colors.tracks[i].unmuted[k] = Number(this.colors.trackBase[k]) + Number(this.colors.trackAugment[k] * (i + 1)) + Number(this.colors.trackRandomness[k] * Math.random());
-                this.colors.tracks[i].muted[k] = this.colors.tracks[i].unmuted[k] - this.colors.trackMuteDifference[k];
+                this.colors.tracks[i].muted[k] = Number(this.colors.trackMuteBase[k]) + Number((this.colors.trackMuteOriginal[k] / 255) * this.colors.tracks[i].unmuted[k]);
             }   
         }
         for(var i = 0; i < this.source.buffer.numberOfChannels; i++){
@@ -1080,23 +1084,24 @@ class multitrackPlayer extends HTMLElement{
         }
 
         //Mute Colors
-
         for(var i = 0; i < this.canvas.track.length; i++){
             var muteLabel = this.shadow.getElementById('muteLabel_' + i);
+            var isClipping = this.trackMeters[i].checkClipping();
+            //console.log(this.trackMeters[i].volume);
             if (this.canvas.track[i].muted) muteLabel.style.backgroundColor = 'rgb(' + this.colors.tracks[i].muted[0] + ',' + this.colors.tracks[i].muted[1] + ',' + this.colors.tracks[i].muted[2] + ')';
-            else muteLabel.style.backgroundColor = 'rgb(' + (this.colors.tracks[i].unmuted[0]) + ',' + (this.colors.tracks[i].unmuted[1]) + ',' + (this.colors.tracks[i].unmuted[2]) + ')';
+            else muteLabel.style.backgroundColor = 'rgb(' + Number((this.colors.tracks[i].unmuted[0]) + (this.trackMeters[i].volume * this.colors.meterRange[0])) + ',' + Number((this.colors.tracks[i].unmuted[1]) + (this.trackMeters[i].volume * this.colors.meterRange[1])) + ',' + Number((this.colors.tracks[i].unmuted[2]) + (this.trackMeters[i].volume * this.colors.meterRange[2])) + ')';
         }
 
         //Track Meters
         for(var i = 0; i < this.canvas.track.length; i++){
             this.canvas.track[i].meter.clearRect(0,0, this.canvas.meterWidth, this.canvas.meterHeight);
-            var isClipping = this.trackMeters[i].checkClipping();
+            
             if(this.canvas.track[i].muted == true && isClipping == false) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.muted[0] + ',' + this.colors.meter.muted[1] + ',' + this.colors.meter.muted[2]  + ')';
             if(this.canvas.track[i].muted == true && isClipping == true) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.mutedClipping[0] + ',' + this.colors.meter.mutedClipping[1] + ',' + this.colors.meter.mutedClipping[2]  + ')';
             if(this.canvas.track[i].muted == false && isClipping == false) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.unmuted[0] + ',' + this.colors.meter.unmuted[1] + ',' + this.colors.meter.unmuted[2]  + ')';
             if(this.canvas.track[i].muted == false && isClipping == true) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.unmutedClipping[0] + ',' + this.colors.meter.unmutedClipping[1] + ',' + this.colors.meter.unmutedClipping[2]  + ')';
             // draw a bar based on the current volume
-            this.canvas.track[i].meter.fillRect(0,  this.canvas.meterHeight - (this.canvas.meterHeight * 3 * this.trackMeters[i].volume),  this.canvas.meterWidth, this.canvas.meterHeight * 3 * this.trackMeters[i].volume );
+           // this.canvas.track[i].meter.fillRect(0,  this.canvas.meterHeight - (this.canvas.meterHeight * 3 * this.trackMeters[i].volume),  this.canvas.meterWidth, this.canvas.meterHeight * 3 * this.trackMeters[i].volume );
         }
         //Master Meter
         this.canvas.master.clearRect(0,0, this.canvas.meterWidth, this.canvas.meterHeight);
