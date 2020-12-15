@@ -102,7 +102,7 @@ template.innerHTML =
             </div>
             <div class="tabcontent" id="preGainDiv">
                 <div>
-                    <input id="preGainSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">
+                    <input id="preGainSlider" type="range" min="0.00000001" max="100" value="1" step="0.0001">
                     <p id="preGain-value">0dB</p>
                 </div>
             </div>
