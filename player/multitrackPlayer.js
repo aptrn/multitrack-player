@@ -59,8 +59,6 @@ template.innerHTML =
                 </div>
             </div>
             <div class="tabcontent" id="equalizerDiv" class="col-md-8">
-                
-    
             </div>
             <div class="tabcontent" id="compressorDiv">
                 <div>
@@ -164,10 +162,10 @@ class multitrackPlayer extends HTMLElement{
         this.canvas = {};
         this.canvas.whole = this.shadowRoot.querySelector('#box-np-main').scrollWidth * this.widthMulti;
         //
-        this.canvas.waveWidth = (this.canvas.whole / 20) * 19 - (this.canvas.whole / 12) ;
+        this.canvas.waveWidth = this.canvas.whole  - (this.canvas.whole / 12) ;
         this.canvas.waveHeight = this.canvas.waveWidth * this.heightMulti;
         
-        this.canvas.meterWidth = this.canvas.whole / 20;
+        this.canvas.meterWidth = 0;
         this.canvas.meterHeight = this.canvas.waveHeight;
         
 
@@ -549,7 +547,7 @@ class multitrackPlayer extends HTMLElement{
             this.canvas.track[i] = {};
             this.canvas.track[i].muted = false; 
             this.canvas.track[i].wave = this.createCanvas("wave", i, this.canvas.waveWidth, this.canvas.waveHeight / this.source.buffer.numberOfChannels); //wave
-            this.canvas.track[i].meter = this.createCanvas("trackMeter", i, this.canvas.meterWidth, this.canvas.meterHeight); //meter
+            //this.canvas.track[i].meter = this.createCanvas("trackMeter", i, this.canvas.meterWidth, this.canvas.meterHeight); //meter
         }
         this.canvas.ui = this.createCanvas("ui", 0, this.canvas.waveWidth, this.canvas.waveHeight); //playehead
         this.canvas.master = this.createCanvas("masterMeter", 0, this.canvas.meterWidth, this.canvas.meterHeight); //master meters
@@ -649,7 +647,7 @@ class multitrackPlayer extends HTMLElement{
             if (type === "wave"){
                 newCanvas.id = "wave" + index;
 
-                newCanvas.setAttribute("class", "col-md-8-h-100");
+                newCanvas.setAttribute("class", "col-md-10-h-100");
                 trackDiv.appendChild(newCanvas);
             }
             else if (type === "trackMeter"){
@@ -1087,12 +1085,13 @@ class multitrackPlayer extends HTMLElement{
         for(var i = 0; i < this.canvas.track.length; i++){
             var muteLabel = this.shadow.getElementById('muteLabel_' + i);
             var isClipping = this.trackMeters[i].checkClipping();
-            //console.log(this.trackMeters[i].volume);
+            var vol = this.trackMeters[i].volume;
             if (this.canvas.track[i].muted) muteLabel.style.backgroundColor = 'rgb(' + this.colors.tracks[i].muted[0] + ',' + this.colors.tracks[i].muted[1] + ',' + this.colors.tracks[i].muted[2] + ')';
-            else muteLabel.style.backgroundColor = 'rgb(' + Number((this.colors.tracks[i].unmuted[0]) + (this.trackMeters[i].volume * this.colors.meterRange[0])) + ',' + Number((this.colors.tracks[i].unmuted[1]) + (this.trackMeters[i].volume * this.colors.meterRange[1])) + ',' + Number((this.colors.tracks[i].unmuted[2]) + (this.trackMeters[i].volume * this.colors.meterRange[2])) + ')';
+            else muteLabel.style.backgroundColor = 'rgb(' + Number((this.colors.tracks[i].unmuted[0]) + (vol * this.colors.meterRange[0])) + ',' + Number((this.colors.tracks[i].unmuted[1]) + (vol * this.colors.meterRange[1])) + ',' + Number((this.colors.tracks[i].unmuted[2]) + (vol * this.colors.meterRange[2])) + ')';
         }
 
         //Track Meters
+        /*
         for(var i = 0; i < this.canvas.track.length; i++){
             this.canvas.track[i].meter.clearRect(0,0, this.canvas.meterWidth, this.canvas.meterHeight);
             
@@ -1101,8 +1100,10 @@ class multitrackPlayer extends HTMLElement{
             if(this.canvas.track[i].muted == false && isClipping == false) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.unmuted[0] + ',' + this.colors.meter.unmuted[1] + ',' + this.colors.meter.unmuted[2]  + ')';
             if(this.canvas.track[i].muted == false && isClipping == true) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.unmutedClipping[0] + ',' + this.colors.meter.unmutedClipping[1] + ',' + this.colors.meter.unmutedClipping[2]  + ')';
             // draw a bar based on the current volume
-           // this.canvas.track[i].meter.fillRect(0,  this.canvas.meterHeight - (this.canvas.meterHeight * 3 * this.trackMeters[i].volume),  this.canvas.meterWidth, this.canvas.meterHeight * 3 * this.trackMeters[i].volume );
+            this.canvas.track[i].meter.fillRect(0,  this.canvas.meterHeight - (this.canvas.meterHeight * 3 * this.trackMeters[i].volume),  this.canvas.meterWidth, this.canvas.meterHeight * 3 * this.trackMeters[i].volume );
         }
+        */
+       
         //Master Meter
         this.canvas.master.clearRect(0,0, this.canvas.meterWidth, this.canvas.meterHeight);
         if (this.masterMeter.checkClipping()) this.canvas.master.fillStyle = 'rgb(' + this.colors.meter.unmutedClipping[0] + ',' + this.colors.meter.unmutedClipping[1] + ',' + this.colors.meter.unmutedClipping[2]  + ')';
