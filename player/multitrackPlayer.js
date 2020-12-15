@@ -1444,6 +1444,7 @@ class multitrackPlayer extends HTMLElement{
                     self.moveStart = false;
                     self.moveEnd = false;
                     self.drag = true;
+                    self.dist = self.endPosition - self.startPosition;
                     self.off = x - self.startPosition;
                 }
             }
@@ -1476,9 +1477,8 @@ class multitrackPlayer extends HTMLElement{
                 else if (self.drag){
                     //console.log("move start");
                     var distStart = -(self.point1 - (x));
-                    var dist = self.endPosition - self.startPosition;
                     self.point1 = Math.min(Math.max(self.point1 + distStart - self.off, 0), self.canvas.waveWidth);
-                    self.point2 = Math.min(Math.max(self.point1 + dist, 0), self.canvas.waveWidth);
+                    self.point2 = Math.min(Math.max(self.point1 + self.dist, 0), self.canvas.waveWidth);
                     if(self.isPlaying) {
                         self.keepChrome = true;
                         self.stop();
