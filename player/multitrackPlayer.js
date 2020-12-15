@@ -28,15 +28,15 @@ template.innerHTML =
                     <input id="btn-np-loop" type="checkbox">loop</input>
             </div>
             <div id="zoomDiv" class="col-md-2" style="display:none">
-                <input id="zoomSlider" type="range" min="0" max="1" value="0" step="0.01"></input>
+                <input  type="range" id="zoomSlider"min="0" max="1" value="0" step="0.01"></input>
                 <p id="zoom-value">0%</p>
             </div>
             <div id="rotationDiv" class="col-md-2">
-                <input id="rotation" type="range" min="0" max="1" value="0.5" step="0.01"></input>
+                <input type="range" id="rotation"  min="0" max="1" value="0.5" step="0.01"></input>
                 <p id="rotLab"></p>
             </div>
             <div id="volumeDiv" class="col-md-2">
-                <input id="volumeSlider" type="range" min="0.00000001" max="4" value="1" step="0.0001">
+                <input type="range" id="volumeSlider" min="0.00000001" max="4" value="1" step="0.0001">
                 <p id="volume-value">0dB</p>
             </div>
             <div id="parameters" class="col-md-4">
@@ -50,11 +50,11 @@ template.innerHTML =
         <div id="piuSotto" class="row">
             <div class="tabcontent" id="filterDiv" class="col-md-8">
                 <div>
-                    <input id="lp" type="range" min="15000" max="20000" value="20000" step="1">Low Pass Filter</input>
+                    <input type="range" id="lp" min="15000" max="20000" value="20000" step="1">Low Pass Filter</input>
                     <p id="lp-value">20000Hz</p>
                 </div>
                 <div>
-                    <input id="hp" type="range" min="20" max="300" value="20" step="1">High Pass Filter</input>
+                    <input type="range" id="hp"  min="20" max="300" value="20" step="1">High Pass Filter</input>
                     <p id="hp-value">20Hz</p>
                 </div>
             </div>
@@ -67,19 +67,19 @@ template.innerHTML =
                     <input id="compEnabled" type="checkbox">Enabled</input>
                 </div>
                 <div>
-                    <input id="threshold" type="range" min="-90" max="0" value="0" step="0.01">threshold</input>
+                    <input  type="range" id="threshold"min="-90" max="0" value="0" step="0.01">threshold</input>
                     <p id="threshold-value">0dB</p>
                 </div>
                 <div>
-                    <input id="ratio" type="range" min="1" max="48" value="1" step="0.01">ratio</input>
+                    <input  type="range" id="ratio"min="1" max="48" value="1" step="0.01">ratio</input>
                     <p id="ratio-value">1 : 1</p>
                 </div>
                 <div>
-                    <input id="attack" type="range" min="0" max="50" value="10" step="0.01">attack</input>
+                    <input  type="range" id="attack"min="0" max="50" value="10" step="0.01">attack</input>
                     <p id="attack-value">10ms</p>
                 </div>
                 <div>
-                    <input id="release" type="range" min="0" max="50" value="10" step="0.01">release</input>
+                    <input  type="range" id="release"min="0" max="50" value="10" step="0.01">release</input>
                     <p id="release-value">10ms</p>
                 </div>
             </div>
@@ -88,21 +88,21 @@ template.innerHTML =
                     <input id="limEnabled" type="checkbox">Enabled</input>
                 </div>
                 <div>
-                    <input id="lim_threshold" type="range" min="-90" max="0" value="0" step="0.01">threshold</input>
+                    <input  type="range" id="lim_threshold"min="-90" max="0" value="0" step="0.01">threshold</input>
                     <p id="lim_threshold-value">0dB</p>
                 </div>
                 <div>
-                    <input id="lim_attack" type="range" min="0" max="50" value="10" step="0.01">attack</input>
+                    <input  type="range" id="lim_attack"min="0" max="50" value="10" step="0.01">attack</input>
                     <p id="lim_attack-value">10ms</p>
                 </div>
                 <div>
-                    <input id="lim_release" type="range" min="0" max="50" value="10" step="0.01">release</input>
+                    <input  type="range" id="lim_release"min="0" max="50" value="10" step="0.01">release</input>
                     <p id="lim_release-value">10ms</p>
                 </div>
             </div>
             <div class="tabcontent" id="preGainDiv">
                 <div>
-                    <input id="preGainSlider" type="range" min="0.00000001" max="100" value="1" step="0.0001">
+                    <input  type="range" id="preGainSlider"min="0.00000001" max="100" value="1" step="0.0001">
                     <p id="preGain-value">0dB</p>
                 </div>
             </div>
@@ -1193,6 +1193,45 @@ class multitrackPlayer extends HTMLElement{
     //Callbacks for buttons
     addCallbacks(){
         var self = this;
+        var inputs = this.shadowRoot.querySelectorAll("input");
+        for(var s = 0; s < inputs.length; s++){
+            console.log(inputs[s].attributes[1]);
+            if(inputs[s].getAttribute('type') == 'range'){
+                inputs[s].addEventListener("dblclick", function(){  
+                    this.value = this.defaultValue;    
+                    if (this.id == 'volumeSlider'){
+                        var label = self.shadow.getElementById("volume-value");
+                        label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
+                    }
+                    if (this.id == 'preGainSlider'){
+                        var label = self.shadow.getElementById("preGainSlider-value");
+                        label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
+                    }
+                    else if (this.id == 'zoomSlider'){
+                        var label = self.shadow.getElementById("zoom-value");
+                        label.innerHTML = this.value + "%";
+                    }
+                    else if (this.id == 'lp' || this.id == 'hp'){
+                        var label = self.shadow.getElementById(this.id + "-value");
+                        label.innerHTML = this.value + "Hz";
+                    }
+                    else if (this.id == 'attack' || this.id == 'release' || this.id == 'lim_release' || this.id == 'lim_attack'){
+                        var label = self.shadow.getElementById(this.id + "-value");
+                        label.innerHTML = this.value + "ms";
+                    }
+                    else if (this.id == 'threshold' || this.id == 'lim_threshold'){
+                        var label = self.shadow.getElementById(this.id + "-value");
+                        label.innerHTML = this.value + "dB";
+                    }
+                    else if (this.id == 'ratio'){
+                        var label = self.shadow.getElementById(this.id + "-value");
+                        label.innerHTML = this.value + " : 1";
+                    }
+                    
+                });
+            }
+        }
+       
         this.shadowRoot.getElementById('filter').addEventListener('click', function(e){
             self.openTab(e, this.id);
         });
