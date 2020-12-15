@@ -157,6 +157,7 @@ class multitrackPlayer extends HTMLElement{
 
         this.widthMulti = this.getAttribute('widthMultiplier');
         this.heightMulti = this.getAttribute('heightMultiplier');
+        this.analyserHeightMulti = this.getAttribute('analyserHeightMultiplier');
         
         //Create two draw context
         this.context = new Array(2);
@@ -171,7 +172,7 @@ class multitrackPlayer extends HTMLElement{
         
 
         this.canvas.analyserWidth = this.canvas.waveWidth + this.canvas.meterWidth;
-        this.canvas.analyserHeight =  this.canvas.waveHeight / 6;
+        this.canvas.analyserHeight =  this.canvas.waveHeight *  this.analyserHeightMulti;
 
         //console.log(this.canvas.analyserWidth);
         //console.log(this.canvas.waveWidth + this.canvas.meterWidth);
