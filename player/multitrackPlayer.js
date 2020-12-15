@@ -207,7 +207,7 @@ class multitrackPlayer extends HTMLElement{
         this.endPosition = this.canvas.waveWidth;
         this.point1 = 0;
         this.point2 = this.canvas.waveWidth;
-
+        this.clicking = false;
 
         this.zoom = 0;
         this.scroll = 0;
@@ -1167,7 +1167,6 @@ class multitrackPlayer extends HTMLElement{
                     self.mettiPlay(self.restartPoint);
                     self.restartPoint = self.loopStart;
                 }
-                else if (self.isChrome && self.clicking) self.stop();
             }
         });
     }
@@ -1252,8 +1251,6 @@ class multitrackPlayer extends HTMLElement{
             self.zoom = this.value, self.audioContext.currentTime;
             var label = self.shadow.getElementById("zoom-value");
             label.innerHTML = this.value + "%";
-
-
                                               //data,spp,scroll,width,resolution (spp = 109 ?)
             self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
         
@@ -1426,6 +1423,7 @@ class multitrackPlayer extends HTMLElement{
         this.shadow.getElementById("ui").addEventListener('mousedown', function(e){
             var bound = this.getBoundingClientRect();
             var x = e.clientX - bound.left;
+            self.clicking = true;
             if(e.clientY > self.canvas.waveHeight / 2){   //Se premi nella metà inferiore
                 self.restartPoint = self.playheadPosition;
                 var dist = self.endPosition - self.startPosition;
@@ -1450,93 +1448,90 @@ class multitrackPlayer extends HTMLElement{
                 }
             }
         })
-        this.shadow.getElementById("ui").addEventListener('mousemove', function(e){
-            var bound = this.getBoundingClientRect();
-            var x = e.clientX - bound.left;           
-            if(self.moveStart){
-                //console.log("move start");
-                self.point1 = Math.min(Math.max(e.clientX - bound.left, 0), self.endPosition);
-                if(self.isPlaying) {
-                    self.keepChrome = true;
-                    self.stop();
+        this.shadow.getElementById("box-np-main").addEventListener('mousemove', function(e){
+            if(self.clicking == true){
+                var bound = this.getBoundingClientRect();
+            
+                var uiBound = self.shadow.getElementById("ui").getBoundingClientRect();
+                console.log(uiBound);
+                var x = e.clientX - bound.left - uiBound.left;           
+                if(self.moveStart){
+                    //console.log("move start");
+                    self.point1 = Math.min(Math.max(x, 0), self.endPosition);
+                    if(self.isPlaying) {
+                        self.keepChrome = true;
+                        self.stop();
+                    }
+                    self.updateBounds(multitrackPlayer.map_range(self.point1, 0, self.canvas.waveWidth, 0, 1), multitrackPlayer.map_range(self.point2 , 0, self.canvas.waveWidth, 0, 1));
                 }
-                self.updateBounds(multitrackPlayer.map_range(self.point1, 0, self.canvas.waveWidth, 0, 1), multitrackPlayer.map_range(self.point2 , 0, self.canvas.waveWidth, 0, 1));
-            }
-            else if (self.moveEnd){
-                //console.log("move end")
-                self.point2 = Math.min(Math.max(e.clientX - bound.left, self.startPosition), self.canvas.waveWidth);
-                if(self.isPlaying) {
-                    self.keepChrome = true;
-                    self.stop();   
+                else if (self.moveEnd){
+                    //console.log("move end")
+                    self.point2 = Math.min(Math.max(x, self.startPosition), self.canvas.waveWidth);
+                    if(self.isPlaying) {
+                        self.keepChrome = true;
+                        self.stop();   
+                    }
+                    self.updateBounds(self.startPoint, multitrackPlayer.map_range(self.point2, 0, self.canvas.waveWidth, 0, 1));
                 }
-                self.updateBounds(self.startPoint, multitrackPlayer.map_range(self.point2, 0, self.canvas.waveWidth, 0, 1));
-            }
-            else if (self.drag){
-                //console.log("move start");
-                var distStart = -(self.point1 - (e.clientX - bound.left));
-                var dist = self.endPosition - self.startPosition;
-                self.point1 = Math.min(Math.max(self.point1 + distStart - self.off, 0), self.canvas.waveWidth);
-                self.point2 = Math.min(Math.max(self.point1 + dist, 0), self.canvas.waveWidth);
-                if(self.isPlaying) {
-                    self.keepChrome = true;
-                    self.stop();
+                else if (self.drag){
+                    //console.log("move start");
+                    var distStart = -(self.point1 - (x));
+                    var dist = self.endPosition - self.startPosition;
+                    self.point1 = Math.min(Math.max(self.point1 + distStart - self.off, 0), self.canvas.waveWidth);
+                    self.point2 = Math.min(Math.max(self.point1 + dist, 0), self.canvas.waveWidth);
+                    if(self.isPlaying) {
+                        self.keepChrome = true;
+                        self.stop();
+                    }
+                    self.updateBounds(multitrackPlayer.map_range(self.point1, 0, self.canvas.waveWidth, 0, 1), multitrackPlayer.map_range(self.point2 , 0, self.canvas.waveWidth, 0, 1));
                 }
-                self.updateBounds(multitrackPlayer.map_range(self.point1, 0, self.canvas.waveWidth, 0, 1), multitrackPlayer.map_range(self.point2 , 0, self.canvas.waveWidth, 0, 1));
             }
         })
-        this.shadow.getElementById("ui").addEventListener('mouseup', function(e){
-            var bound = this.getBoundingClientRect();
-            if(self.moveStart){
-                self.moveStart = false;
-                self.moveEnd = false;  
-                self.drag = false;  
-                
-                if(self.restartPoint < self.startPoint) {
-                    self.restartPoint = self.startPoint;
-                    self.restartAt(self.startPoint, false);
+        this.shadow.getElementById("box-np-main").addEventListener('mouseup', function(e){
+            if(self.clicking == true){
+                var bound = this.getBoundingClientRect();
+                if(self.moveStart){
+                    self.moveStart = false;
+                    self.moveEnd = false;  
+                    self.drag = false;  
+                    if(self.restartPoint < self.startPoint) {
+                        self.restartPoint = self.startPoint;
+                        self.restartAt(self.startPoint, false);
+                    }
+                    var isChrome = window.chrome;
+                    if(self.keepChrome){
+                        self.keepChrome = false;
+                        self.restartAt(self.startPoint, true);
+                    } 
                 }
-                var isChrome = window.chrome;
-                if(self.keepChrome){
-                    self.keepChrome = false;
-                    self.restartAt(self.startPoint, true);
-                } 
-            }
-            else if (self.moveEnd){
-                self.moveStart = false;
-                self.moveEnd = false; 
-                self.drag = false;
-                if(self.restartPoint > self.endPoint){
-                    self.restartPoint = self.startPoint;
-                    self.restartAt(self.startPoint, false);
-                } 
-                if(self.keepChrome){
-                    self.keepChrome = false;
-                    self.restartAt(self.startPoint, true);
-                } 
-            }
-            else if(self.drag){
-                self.moveStart = false;
-                self.moveEnd = false; 
-                self.drag = false;
+                else if (self.moveEnd){
+                    self.moveStart = false;
+                    self.moveEnd = false; 
+                    self.drag = false;
+                    if(self.restartPoint > self.endPoint){
+                        self.restartPoint = self.startPoint;
+                        self.restartAt(self.startPoint, false);
+                    } 
+                    if(self.keepChrome){
+                        self.keepChrome = false;
+                        self.restartAt(self.startPoint, true);
+                    } 
+                }
+                else if(self.drag){
+                    self.moveStart = false;
+                    self.moveEnd = false; 
+                    self.drag = false;
 
-                if(self.restartPoint < self.startPoint || self.restartPoint > self.endPoint){
-                    self.restartPoint = self.startPoint;
-                    self.restartAt(self.startPoint, false);
-                } 
-                if(self.keepChrome){
-                    self.keepChrome = false;
-                    self.restartAt(self.startPoint, true);
-                } 
-            }
-            if(self.clicking){
-                self.point2 = Math.min(Math.max(e.clientX - bound.left, 0), self.canvas.waveWidth);
+                    if(self.restartPoint < self.startPoint || self.restartPoint > self.endPoint){
+                        self.restartPoint = self.startPoint;
+                        self.restartAt(self.startPoint, false);
+                    } 
+                    if(self.keepChrome){
+                        self.keepChrome = false;
+                        self.restartAt(self.startPoint, true);
+                    } 
+                }
                 self.clicking = false;
-                self.updateBounds(multitrackPlayer.map_range(Math.min(self.point1, self.point2), 0, self.canvas.waveWidth, 0, 1), multitrackPlayer.map_range(Math.max(self.point1, self.point2), 0, self.canvas.waveWidth, 0, 1));
-                var isChrome = window.chrome;
-                if(isChrome && self.keepChrome){
-                    self.keepChrome = false;
-                    self.restartAt(self.startPoint, true);
-                } 
             }
         })
         self.shadow.getElementById("box-np-main").style.opacity = 1;
