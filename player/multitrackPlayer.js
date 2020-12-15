@@ -222,6 +222,7 @@ class multitrackPlayer extends HTMLElement{
         this.colors.analyserStyle = this.getAttribute('analyzerStyle');
         this.colors.analyserSize = this.getAttribute('analyzerFFTSize');
         this.colors.uiColor = this.getAttribute('uiRGB').split(',');
+        this.colors.playheadColor = this.getAttribute('playheadRGB').split(',');
         this.colors.textColor = this.getAttribute('textRGB').split(',');
         this.colors.meter = {};
         this.colors.meter.muted = this.getAttribute('mutedRGB').split(',');
@@ -966,7 +967,8 @@ class multitrackPlayer extends HTMLElement{
            else this.lastTime = this.now;
             var position = multitrackPlayer.map_range(this.elapsed + this.source.loopStart, 0, this.currentBuffer.duration, 0, this.canvas.waveWidth);
             this.playheadPosition = position / this.canvas.waveWidth;
-            this.canvas.ui.fillStyle = '#f22';
+
+            this.canvas.ui.fillStyle = 'rgb('+ this.colors.playheadColor[0] +','+ this.colors.playheadColor[1] +','+ this.colors.playheadColor[2] +')';
             this.canvas.ui.beginPath();
             this.canvas.ui.moveTo(position, 0);
             this.canvas.ui.lineTo(position, this.canvas.waveHeight);
