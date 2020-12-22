@@ -28,10 +28,12 @@ template.innerHTML =
                     <input id="btn-np-loop" type="checkbox">loop</input>
             </div>
             <div id="zoomDiv" class="col-md-2">
+            <p>zoom</p>
             <input  type="range" id="zoomSlider"min="0" max="1" value="0" step="0.01"></input>
             <p id="zoom-value">0%</p>
+            <p>scroll</p>
             <input  type="range" id="scrollSlider"min="0" max="1" value="0" step="0.01"></input>
-            <p id="scroll-value">0s</p>
+            <p id="scroll-value">0%</p>
             </div>
             <div id="rotationDiv" class="col-md-2">
                 <input type="range" id="rotation"  min="0" max="1" value="0.5" step="0.01"></input>
@@ -1229,7 +1231,7 @@ class multitrackPlayer extends HTMLElement{
                     }
                     else if (this.id == 'scrollSlider'){
                         var label = self.shadow.getElementById("scroll-value");
-                        label.innerHTML = this.value + "s";
+                        label.innerHTML = this.value + "%";
                     }
                     else if (this.id == 'lp' || this.id == 'hp'){
                         var label = self.shadow.getElementById(this.id + "-value");
@@ -1317,7 +1319,7 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('scrollSlider').addEventListener('change', function() {
             self.scroll = this.value;
             var label = self.shadow.getElementById("scroll-value");
-            label.innerHTML = this.value + "s";
+            label.innerHTML = this.value + "%";
                                               //data,spp,scroll,width,resolution (spp = 109 ?)
             self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
         
