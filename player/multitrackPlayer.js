@@ -27,9 +27,11 @@ template.innerHTML =
                     <button id="btn-np-forward">FW</button>
                     <input id="btn-np-loop" type="checkbox">loop</input>
             </div>
-            <div id="zoomDiv" class="col-md-2" style="display:none">
-                <input  type="range" id="zoomSlider"min="0" max="1" value="0" step="0.01"></input>
-                <p id="zoom-value">0%</p>
+            <div id="zoomDiv" class="col-md-2">
+            <input  type="range" id="zoomSlider"min="0" max="1" value="0" step="0.01"></input>
+            <p id="zoom-value">0%</p>
+            <input  type="range" id="scrollSlider"min="0" max="1" value="0" step="0.01"></input>
+            <p id="scroll-value">0s</p>
             </div>
             <div id="rotationDiv" class="col-md-2">
                 <input type="range" id="rotation"  min="0" max="1" value="0.5" step="0.01"></input>
@@ -836,19 +838,28 @@ class multitrackPlayer extends HTMLElement{
     }
     
     //buffer, 16, 1 , width, 1
-    analyzeData(buff, zoom, scroll, width, resolution) {             //da capire, ridurre i samples per visualizzare meglio, per ora bypass
+    analyzeData(buff, zoom, scroll, width, resolution) {            
         let allChannels = new Array(buff.numberOfChannels);
+        this.maxZoomFactor = 1 / 10;
         for(var c = 0; c < buff.numberOfChannels; c++){
             var thisChannel = buff.getChannelData(c);
 
-            //DA AGGIUSTARE QUI!
-            let spp = Number(multitrackPlayer.map_range(zoom, 0, 1, thisChannel.length / width, (thisChannel.length  / 10)/ width)).toFixed(0);
+            let samplesMinimumZoom = (thisChannel.length * 1);
+            let samplesMaxZoom =  (thisChannel.length  * this.maxZoomFactor);
 
-            //console.log("zoom: " + zoom + " sample length: " + thisChannel.length + " width: " + width + " spp: " + spp);
+            
+            let samplesActualZoom = multitrackPlayer.map_range(zoom, 0, 1, samplesMinimumZoom, samplesMaxZoom).toFixed(0);
+            let spp = (samplesActualZoom / width).toFixed(0);   
+            let scrollPx = multitrackPlayer.map_range(scroll, 0, 1, 0, thisChannel.length - samplesActualZoom).toFixed(0);
+            
             let data = new Array(width);
-            let startSample = scroll * spp;
+            let startSample = Number(scrollPx);
             let skip = Math.ceil(spp / resolution);
-
+            
+            //console.log("zoom: " + zoom + " sample length: " + thisChannel.length + " width: " + width + " spp: " + spp);
+            //console.log("totalSamples " + thisChannel.length +  " spp: " + spp  + " samplesaActualZoom " + samplesActualZoom + " scrollPx: " + scrollPx + " check: " + check);
+            
+            
             for(let i = 0; i < width; i++){
                 let min = 0;
                 let max = 0;
@@ -1216,6 +1227,10 @@ class multitrackPlayer extends HTMLElement{
                         var label = self.shadow.getElementById("zoom-value");
                         label.innerHTML = this.value + "%";
                     }
+                    else if (this.id == 'scrollSlider'){
+                        var label = self.shadow.getElementById("scroll-value");
+                        label.innerHTML = this.value + "s";
+                    }
                     else if (this.id == 'lp' || this.id == 'hp'){
                         var label = self.shadow.getElementById(this.id + "-value");
                         label.innerHTML = this.value + "Hz";
@@ -1292,9 +1307,17 @@ class multitrackPlayer extends HTMLElement{
             self.source.loop = self.loop;
         });
         this.shadowRoot.getElementById('zoomSlider').addEventListener('change', function() {
-            self.zoom = this.value, self.audioContext.currentTime;
+            self.zoom = this.value;
             var label = self.shadow.getElementById("zoom-value");
             label.innerHTML = this.value + "%";
+                                              //data,spp,scroll,width,resolution (spp = 109 ?)
+            self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+        
+        });
+        this.shadowRoot.getElementById('scrollSlider').addEventListener('change', function() {
+            self.scroll = this.value;
+            var label = self.shadow.getElementById("scroll-value");
+            label.innerHTML = this.value + "s";
                                               //data,spp,scroll,width,resolution (spp = 109 ?)
             self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
         
