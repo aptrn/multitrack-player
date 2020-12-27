@@ -114,6 +114,12 @@ template.innerHTML =
             </div>
         </div>
     </div>
+    <div id="region-selection">
+        <p>Region</p>
+        <p id="region-start">0</p>
+        <p id="region-end">0</p>
+        <p id="region-duration">0</p>
+    </div>
 </div>
 </html>
 `
@@ -200,13 +206,11 @@ class multitrackPlayer extends HTMLElement{
         //Initialize variables 
         var self = this;
         this.channels = this.audioContext.destination.maxChannelCount;
-        this.lastTime = 0;
         this.source = null;
         this.currentBuffer = null;
         this.loop = false;
         this.isPlaying = false;
         this.restartPoint = 0;
-        this.playheadPosition = 0;
 
         this.region = {};
 
@@ -579,8 +583,10 @@ class multitrackPlayer extends HTMLElement{
 
         this.region.startSample = 0;
         this.region.endSample = this.totalSamples;
-
-
+        this.shadow.getElementById("region-start").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.startSample));
+        this.shadow.getElementById("region-end").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample));
+        this.shadow.getElementById("region-duration").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample - this.region.startSample));
+    
         window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(this));     //start animation loop for drawPlayhead
     
         
@@ -1007,8 +1013,7 @@ class multitrackPlayer extends HTMLElement{
             this.shadowRoot.getElementById('btn-np-pause').style.display = "none";
         }
 
-        this.activeBufferDuration = this.source.loopEnd - this.source.loopStart;
-        this.now = this.audioContext.currentTime;
+       
 
         let startPx = this.sampleToPx(this.region.startSample);
         let startPosition = startPx == true ? this.canvas.waveWidth : startPx == false ? 0 : startPx;
@@ -1050,23 +1055,17 @@ class multitrackPlayer extends HTMLElement{
         */
 
         //PLAYHEAD
+
+        this.now = this.audioContext.currentTime;
+        if(!this.isPlaying) this.startedAt = this.now;
+        let elapsed = this.now - this.startedAt;
+
         if(!this.moveStart && !this.moveEnd && !this.drag){
-            if(this.isPlaying){
-                if(this.now - this.lastTime >= this.activeBufferDuration ){
-                    this.lastTime = this.now - (this.now - (this.lastTime + this.activeBufferDuration)); //lastTime = timer all'ultimo start
-                }
-                this.elapsed = ((this.now - this.lastTime) % this.activeBufferDuration);
-            }
-            else this.lastTime = this.now;
 
-            let playheadSeconds = this.secondsToSample(this.elapsed + this.source.loopStart);
-            let playHeadPx = this.sampleToPx(playheadSeconds);
+            this.playHeadSamples = this.secondsToSample(elapsed) + this.restartPoint;
+           
+            let playHeadPx = this.sampleToPx(this.playHeadSamples);
             
-
-            //var position = multitrackPlayer.map_range(this.elapsed + this.source.loopStart, 0, this.currentBuffer.duration, 0, this.canvas.waveWidth);
-            
-            
-            //this.playheadPosition = position / this.canvas.waveWidth;
             if(playHeadPx != true && playHeadPx != false){
                 this.canvas.ui.fillStyle = 'rgb('+ this.colors.playheadColor[0] +','+ this.colors.playheadColor[1] +','+ this.colors.playheadColor[2] +')';
                 this.canvas.ui.beginPath();
@@ -1205,67 +1204,44 @@ class multitrackPlayer extends HTMLElement{
     //newStart, newEnd in Samples
     updateBounds(newStart, newEnd){
         var self = this;
-        if(this.isPlaying) {
-            this.keep = true;
-            this.stop();
-        }
-        else{ this.keep = false; }
         this.region.startSample = newStart;
         this.region.endSample = newEnd;
         this.source.loopStart = this.sampleToSeconds(this.region.startSample);
         this.source.loopEnd = this.sampleToSeconds(this.region.endSample);
-        if(this.keep){
-            this.keep = false;
-            this.lastTime = this.audioContext.currentTime;
-            this.mettiPlay(sampleToSeconds(this.region.startSample));
-        }
-    }
+        this.restartPoint = this.region.startSample;
 
-    //newValue in samples
-    restartAt(newValue, forceStart){
-        //console.log("restarting")
-        var self = this;
-        if(self.isPlaying) {
-            self.stop();
-            self.keep = true;
-        }
-        else self.keep = false;
-        var value = self.sampleToSeconds(newValue);
-        if(self.keep || forceStart){
-            self.elapsed = value;
-            self.lastTime = self.audioContext.currentTime + self.source.loopStart - self.elapsed;
 
-            self.mettiPlay(newValue);
-            self.keep = false;
-        }
-        else{
-            self.elapsed = value - self.source.loopStart;
-            self.lastTime = self.audioContext.currentTime + self.source.loopStart - self.elapsed;
-        }
+        this.shadow.getElementById("region-start").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.startSample));
+        this.shadow.getElementById("region-end").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample));
+        this.shadow.getElementById("region-duration").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample - this.region.startSample));
     }
 
     //playPos in samples
     mettiPlay(playPos){
         var self = this;
+        if(self.isPlaying) self.stop();
         self.isPlaying = true;
-        self.source.start(self.audioContext.currentTime, self.sampleToSeconds(playPos), self.sampleToSeconds(self.region.endSample) - self.sampleToSeconds(playPos));
+        self.startedAt = self.audioContext.currentTime;
+        if(self.loop && playPos >= self.region.endSample){
+            playPos = self.region.startSample;
+            self.restartPoint = self.region.startSample;
+        }
+        if(playPos >= self.region.startSample && playPos < self.region.endSample) self.source.start(self.audioContext.currentTime, self.sampleToSeconds(playPos), self.sampleToSeconds(self.region.endSample) - self.sampleToSeconds(playPos));
+        else if (playPos >= self.region.endSample) self.source.start(self.audioContext.currentTime, self.sampleToSeconds(playPos), self.sampleToSeconds(self.totalSamples) - self.sampleToSeconds(playPos));
+        else if (playPos < self.region.startSample) self.source.start(self.audioContext.currentTime, self.sampleToSeconds(playPos), self.sampleToSeconds(self.region.endSample) - self.sampleToSeconds(playPos));
         self.source.addEventListener('ended', () => {
-            if(!self.loop){
-                self.stop();
-                self.restartPoint = null;
-            } 
-            else{
-                var isChrome = window.chrome;
-                if(isChrome && !self.restartChrome) {
-                    self.restartAt(self.region.startSample, false);
-                } 
-                else if (isChrome && self.restartChrome){
-                    self.restartChrome = false;
-                    self.mettiPlay(self.restartPoint);
-                    self.restartPoint = self.loopStart;
-                }
+            if(self.paused){
+                self.paused = false;
             }
-        });
+            else self.restartPoint = self.region.startSample;
+            if(self.loop){
+                self.stop();
+                self.mettiPlay(self.region.startSample);
+            }
+            else if(!self.loop){
+                self.stop();
+            } 
+          })
     }
 
     stop(){
@@ -1289,49 +1265,7 @@ class multitrackPlayer extends HTMLElement{
 
     //Callbacks for buttons
     addCallbacks(){
-        var self = this;
-        var inputs = this.shadowRoot.querySelectorAll("input");
-        for(var s = 0; s < inputs.length; s++){
-            if(inputs[s].getAttribute('type') == 'range'){
-                inputs[s].addEventListener("dblclick", function(){  
-                    this.value = this.defaultValue;    
-                    if (this.id == 'volumeSlider'){
-                        var label = self.shadow.getElementById("volume-value");
-                        label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
-                    }
-                    if (this.id == 'preGainSlider'){
-                        var label = self.shadow.getElementById("preGainSlider-value");
-                        label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
-                    }
-                    else if (this.id == 'zoomSlider'){
-                        var label = self.shadow.getElementById("zoom-value");
-                        label.innerHTML = this.value + "%";
-                    }
-                    else if (this.id == 'scrollSlider'){
-                        var label = self.shadow.getElementById("scroll-value");
-                        label.innerHTML = this.value + "%";
-                    }
-                    else if (this.id == 'lp' || this.id == 'hp'){
-                        var label = self.shadow.getElementById(this.id + "-value");
-                        label.innerHTML = this.value + "Hz";
-                    }
-                    else if (this.id == 'attack' || this.id == 'release' || this.id == 'lim_release' || this.id == 'lim_attack'){
-                        var label = self.shadow.getElementById(this.id + "-value");
-                        label.innerHTML = this.value + "ms";
-                    }
-                    else if (this.id == 'threshold' || this.id == 'lim_threshold'){
-                        var label = self.shadow.getElementById(this.id + "-value");
-                        label.innerHTML = this.value + "dB";
-                    }
-                    else if (this.id == 'ratio'){
-                        var label = self.shadow.getElementById(this.id + "-value");
-                        label.innerHTML = this.value + " : 1";
-                    }
-                    
-                });
-            }
-        }
-       
+        var self = this;      
         this.shadowRoot.getElementById('filter').addEventListener('click', function(e){
             self.openTab(e, this.id);
         });
@@ -1340,47 +1274,30 @@ class multitrackPlayer extends HTMLElement{
         });
         this.shadowRoot.getElementById('btn-np-play').addEventListener('click', function(){
             if(!self.isPlaying){
-                self.lastTime = self.audioContext.currentTime;
-                if(self.restartPoint != null){
-                    if(isNaN(self.restartPoint)) self.restartPoint = self.region.startSample;
-                    self.restartAt(self.restartPoint, true);
-                }
-                else{
-                    //console.log(self.region.startSample);
-                    self.mettiPlay(self.region.startSample);
-                }
-                self.restartPoint = null;
+                self.mettiPlay(self.restartPoint);
             }
         });
         this.shadowRoot.getElementById('btn-np-pause').addEventListener('click', function(){
-            self.lastTime = self.audioContext.currentTime;
+            self.paused = true;
+            self.restartPoint = self.playHeadSamples;
             self.stop();
-            self.restartPoint = self.playheadPosition;
         });
         this.shadowRoot.getElementById('btn-np-stop').addEventListener('click', function(){
-            self.lastTime = self.audioContext.currentTime;
             if(self.isPlaying){
                 self.stop();
             }
-            self.restartAt(self.region.startSample, false);
-            self.restartPoint = null;
+            self.restartPoint = self.region.startSample;
         });
         
         this.shadowRoot.getElementById('btn-np-forward').addEventListener('click', function(){
             //console.log("FORWARD!")            
-            self.restartPoint = Math.min(self.playheadPosition + 0.1, self.region.endSample);
-            if(self.restartPoint == self.region.endSample) self.restartPoint = self.region.startSample;
-            //console.log(self.restartPoint);
-            var isChrome = window.chrome;
-            if(isChrome && self.isPlaying) self.restartChrome = true;
-            self.restartAt(self.restartPoint, self.isPlaying);            
+            self.restartPoint = self.playHeadSamples + self.totalSamples / 100;
+            if(self.restartPoint >= self.region.endSample) self.restartPoint = self.region.startSample; 
         });
         this.shadowRoot.getElementById('btn-np-backward').addEventListener('click', function(){
             //console.log("BACK!")            
-            self.restartPoint = Math.max(self.playheadPosition - 0.1, self.region.startSample);
-            var isChrome = window.chrome;
-            if(isChrome && self.isPlaying) self.restartChrome = true;
-            self.restartAt(self.restartPoint, self.isPlaying);
+            self.restartPoint = self.playHeadSamples - self.totalSamples / 100;
+            if(self.restartPoint <= self.region.startSample) self.restartPoint = self.region.startSample;
         });
         this.shadowRoot.getElementById('btn-np-loop').addEventListener('click', function() {
             self.loop = this.checked;
@@ -1390,17 +1307,27 @@ class multitrackPlayer extends HTMLElement{
             self.zoom = this.value;
             var label = self.shadow.getElementById("zoom-value");
             label.innerHTML = this.value + "%";
-                                              //data,this.spp,scroll,width,resolution (this.spp = 109 ?)
             self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
-        
+        });
+        this.shadowRoot.getElementById('zoomSlider').addEventListener("dblclick", function(){  
+            this.value = this.defaultValue;
+            self.zoom = this.value;
+            var label = self.shadow.getElementById("zoom-value");
+            label.innerHTML = this.value + "%";
+            self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
         });
         this.shadowRoot.getElementById('scrollSlider').addEventListener('change', function() {
             self.scroll = this.value;
             var label = self.shadow.getElementById("scroll-value");
             label.innerHTML = this.value + "%";
-                                              //data,this.spp,scroll,width,resolution (this.spp = 109 ?)
             self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
-        
+        });
+        this.shadowRoot.getElementById('scrollSlider').addEventListener('dblclick', function() {
+            this.value = this.defaultValue;
+            self.scroll = this.value;
+            var label = self.shadow.getElementById("scroll-value");
+            label.innerHTML = this.value + "%";
+            self.dataToDisplay = self.analyzeData(self.source.buffer, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
         });
         this.shadowRoot.getElementById('rotation').addEventListener('change', function() {
             if(self.encoding === "B-Format"){
@@ -1409,9 +1336,26 @@ class multitrackPlayer extends HTMLElement{
                 self.sceneRotator.updateRotMtx();
             }
             else if (self.encoding === "MS"){
-
                 this.newPan = multitrackPlayer.map_range(this.value, 0, 1, 2, 0);
-
+                self.sides[0].gain.setValueAtTime(1 + (1 - this.newPan), self.audioContext.currentTime);
+                self.sides[1].gain.setValueAtTime(1 + (1 - this.newPan), self.audioContext.currentTime);
+                self.phaseInversion.gain.setValueAtTime(this.newPan - 1, self.audioContext.currentTime);
+            }
+            else if (self.encoding === "MONO"){
+                this.newPan = multitrackPlayer.map_range(this.value, 0, 1, -1, 1);
+                self.gainL.gain.setValueAtTime(1 - this.value, self.audioContext.currentTime);
+                self.gainR.gain.setValueAtTime(this.value, self.audioContext.currentTime);
+            }
+        });
+        this.shadowRoot.getElementById('rotation').addEventListener('dblclick', function() {
+            this.value = this.defaultValue;
+            if(self.encoding === "B-Format"){
+                this.newRot = multitrackPlayer.map_range(this.value, 0, 1, 0, 360);
+                self.sceneRotator.yaw = this.newRot;
+                self.sceneRotator.updateRotMtx();
+            }
+            else if (self.encoding === "MS"){
+                this.newPan = multitrackPlayer.map_range(this.value, 0, 1, 2, 0);
                 self.sides[0].gain.setValueAtTime(1 + (1 - this.newPan), self.audioContext.currentTime);
                 self.sides[1].gain.setValueAtTime(1 + (1 - this.newPan), self.audioContext.currentTime);
                 self.phaseInversion.gain.setValueAtTime(this.newPan - 1, self.audioContext.currentTime);
@@ -1427,12 +1371,30 @@ class multitrackPlayer extends HTMLElement{
             var label = self.shadow.getElementById("volume-value");
             label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
         });
+        this.shadowRoot.getElementById('volumeSlider').addEventListener('dblclick', function() {
+            this.value = this.defaultValue;
+            self.gain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
+            var label = self.shadow.getElementById("volume-value");
+            label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
+        });
         this.shadowRoot.getElementById('lp').addEventListener('change', function() {
             self.lp.frequency.setValueAtTime(this.value, self.audioContext.currentTime);
             var label = self.shadow.getElementById("lp-value");
             label.innerHTML = this.value + "Hz";
         });
+        this.shadowRoot.getElementById('lp').addEventListener('dblclick', function() {
+            this.value = this.defaultValue;
+            self.lp.frequency.setValueAtTime(this.value, self.audioContext.currentTime);
+            var label = self.shadow.getElementById("lp-value");
+            label.innerHTML = this.value + "Hz";
+        });
         this.shadowRoot.getElementById('hp').addEventListener('change', function() {
+            self.hp.frequency.setValueAtTime(this.value, self.audioContext.currentTime);
+            var label = self.shadow.getElementById("hp-value");
+            label.innerHTML = this.value + "Hz";
+        });
+        this.shadowRoot.getElementById('hp').addEventListener('dblclick', function() {
+            this.value = this.defaultValue;
             self.hp.frequency.setValueAtTime(this.value, self.audioContext.currentTime);
             var label = self.shadow.getElementById("hp-value");
             label.innerHTML = this.value + "Hz";
@@ -1443,6 +1405,13 @@ class multitrackPlayer extends HTMLElement{
                 self.openTab(e, this.id);
             });
             this.shadowRoot.getElementById('preGainSlider').addEventListener('change', function() {
+                self.preGainValue = this.value;
+                self.preGain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
+                var label = self.shadow.getElementById("preGain-value");
+                label.innerHTML = (10 * Math.log10(this.value)).toFixed(1) + "dB";
+            });
+            this.shadowRoot.getElementById('preGainSlider').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
                 self.preGainValue = this.value;
                 self.preGain.gain.setValueAtTime(this.value, self.audioContext.currentTime);
                 var label = self.shadow.getElementById("preGain-value");
@@ -1464,7 +1433,27 @@ class multitrackPlayer extends HTMLElement{
                 var label = self.shadow.getElementById("threshold-value");
                 label.innerHTML = this.value + "dB";
             });
+            this.shadowRoot.getElementById('threshold').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
+                self.compressore.threshold = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].threshold.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("threshold-value");
+                label.innerHTML = this.value + "dB";
+            });
             this.shadowRoot.getElementById('ratio').addEventListener('change', function() {
+                self.compressore.ratio = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].ratio.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("ratio-value");
+                label.innerHTML = this.value + " : 1";
+            });
+            this.shadowRoot.getElementById('ratio').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
                 self.compressore.ratio = this.value;
                 var n =  self.audioContext.currentTime;
                 for(var c = 0; c < self.compressor.length; c++){
@@ -1482,7 +1471,27 @@ class multitrackPlayer extends HTMLElement{
                 var label = self.shadow.getElementById("attack-value");
                 label.innerHTML = this.value + "ms";
             });
+            this.shadowRoot.getElementById('attack').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
+                self.compressore.attack = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].attack.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("attack-value");
+                label.innerHTML = this.value + "ms";
+            });
             this.shadowRoot.getElementById('release').addEventListener('change', function() {
+                self.compressore.release = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.compressor.length; c++){
+                    self.compressor[c].release.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("release-value");
+                label.innerHTML = this.value + "ms";
+            });
+            this.shadowRoot.getElementById('release').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
                 self.compressore.release = this.value;
                 var n =  self.audioContext.currentTime;
                 for(var c = 0; c < self.compressor.length; c++){
@@ -1512,7 +1521,27 @@ class multitrackPlayer extends HTMLElement{
                 var label = self.shadow.getElementById("lim_threshold-value");
                 label.innerHTML = this.value + "dB";
             });
+            this.shadowRoot.getElementById('lim_threshold').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
+                self.limiterParameters.threshold = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.limiter.length; c++){
+                    self.limiter[c].threshold.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("lim_threshold-value");
+                label.innerHTML = this.value + "dB";
+            });
             this.shadowRoot.getElementById('lim_attack').addEventListener('change', function() {
+                self.limiterParameters.attack = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.limiter.length; c++){
+                    self.limiter[c].attack.setValueAtTime(this.value, n);
+                }
+                var label = self.shadow.getElementById("lim_attack-value");
+                label.innerHTML = this.value + "ms";
+            });
+            this.shadowRoot.getElementById('lim_attack').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
                 self.limiterParameters.attack = this.value;
                 var n =  self.audioContext.currentTime;
                 for(var c = 0; c < self.limiter.length; c++){
@@ -1530,161 +1559,94 @@ class multitrackPlayer extends HTMLElement{
                 var label = self.shadow.getElementById("lim_release-value");
                 label.innerHTML = this.value + "ms";
             });
-        }
-        this.shadow.getElementById("ui").addEventListener('click', function(e){
-            /*
-            var bound = this.getBoundingClientRect();
-            if(e.clientY - bound.y < self.canvas.waveHeight / 2){
-                var value = e.clientX - bound.x;
-                if( value >= self.startPosition && value <= self.endPosition){
-                    var isChrome = window.chrome;
-                    if(isChrome != undefined) {  
-                        if(self.isPlaying){
-                            if(self.source.loop){
-                                self.restartChrome = true;
-                                self.restartPoint = multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1);
-                                self.stop();
-                                self.restartAt(multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1), true);
-                            }
-                            else {
-                                self.restartChrome = true;
-                                self.restartPoint = multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1);
-                                self.stop();
-                            }
-                        } 
-                        else self.restartAt(multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1), true);
-                    }
-                    else{
-                        if(self.isPlaying){
-                            if(self.source.loop){
-                                self.stop();
-                                self.restartAt(multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1), true);
-                            }
-                            else self.restartAt(multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1), true);
-                        }
-                        else self.restartAt(multitrackPlayer.map_range(value, 0, self.canvas.waveWidth, 0, 1), true);
-                    }
+            this.shadowRoot.getElementById('lim_release').addEventListener('dblclick', function() {
+                this.value = this.defaultValue;
+                self.limiterParameters.release = this.value;
+                var n =  self.audioContext.currentTime;
+                for(var c = 0; c < self.limiter.length; c++){
+                    self.limiter[c].release.setValueAtTime(this.value, n);
                 }
-            }
-            */
-        })
+                var label = self.shadow.getElementById("lim_release-value");
+                label.innerHTML = this.value + "ms";
+            });
+        }
         this.shadow.getElementById("ui").addEventListener('mousedown', function(e){
             var bound = this.getBoundingClientRect();
             var x = e.clientX - bound.left;
-            if(e.clientY > self.canvas.waveHeight / 2){   //Se premi nella metà inferiore
-                self.clicking = true;
-                self.restartPoint = self.playheadPosition;
+            if(self.isPlaying) self.stop();
+            self.clicking = true;
+            self.xInterction = x;
+            //self.restartPoint = self.playHeadSamples;
 
-                let startPx = self.sampleToPx(self.region.startSample);
-                let endPx = self.sampleToPx(self.region.endSample);
-                
-                let startPosition = startPx == true ? self.canvas.waveWidth + 20 : startPx == false ? -20 : Number(startPx);
-                let endPosition = endPx == true ? self.canvas.waveWidth + 20 : endPx == false ? - 20 : Number(endPx);
-                var distPx = Number(endPosition - startPosition);
+            let startPx = self.sampleToPx(self.region.startSample);
+            let endPx = self.sampleToPx(self.region.endSample);
+            
+            let startPosition = startPx == true ? self.canvas.waveWidth + 20 : startPx == false ? -20 : Number(startPx);
+            let endPosition = endPx == true ? self.canvas.waveWidth + 20 : endPx == false ? - 20 : Number(endPx);
+            var distPx = Number(endPosition - startPosition);
 
-                if(Math.abs(x - startPosition) < distPx * 0.2){
-                    console.log("move start");
-                    self.moveStart = true;
-                    self.moveEnd = false;
-                    self.drag = false;
-                }
-                else if (Math.abs(endPosition - x) < distPx * 0.2){
-                    console.log("move end")
-                    self.moveStart = false;
-                    self.moveEnd = true;
-                    self.drag = false;
-                }
-                else if(x > startPosition + (distPx * 0.2) && x < endPosition - (distPx * 0.2)){
-                    //DRAG
-                    console.log("drag");
-                    self.moveStart = false;
-                    self.moveEnd = false;
-                    self.drag = true;
-                    self.offSamples = self.pxToSample(x) - self.region.startSample;
-                    self.durationSamples = self.region.endSample - self.region.startSample;
-                }
+            if(Math.abs(x - startPosition) < distPx * 0.2){
+                //console.log("move start");
+                self.moveStart = true;
+                self.moveEnd = false;
+                self.drag = false;
+            }
+            else if (Math.abs(endPosition - x) < distPx * 0.2){
+                //console.log("move end")
+                self.moveStart = false;
+                self.moveEnd = true;
+                self.drag = false;
+            }
+            else if(x > startPosition + (distPx * 0.2) && x < endPosition - (distPx * 0.2)){
+                //console.log("drag");
+                self.moveStart = false;
+                self.moveEnd = false;
+                self.drag = true;
+                self.offSamples = self.pxToSample(x) - self.region.startSample;
+                self.durationSamples = self.region.endSample - self.region.startSample;
             }
         })
         this.shadow.getElementById("box-np-main").addEventListener('mousemove', function(e){
             if(self.clicking == true){
+                self.interaction = true;
                 var bound = this.getBoundingClientRect();
                 var uiBound = self.shadow.getElementById("ui").getBoundingClientRect();
                 var x = e.clientX - bound.left - uiBound.left;     
                 if(self.moveStart){
                     //console.log("move start");
-                    if(self.isPlaying) {
-                        self.keepChrome = true;
-                        self.stop();
-                    }
                     self.updateBounds(multitrackPlayer.clamp(self.pxToSample(x), 0, self.region.endSample - (self.samplesMaxZoom * 0.05)), self.region.endSample);
                 }
                 
                 else if (self.moveEnd){
                     //console.log("move end")
-                   if(self.isPlaying) {
-                        self.keepChrome = true;
-                        self.stop();   
-                    }
                     self.updateBounds(self.region.startSample, multitrackPlayer.clamp(self.pxToSample(x), self.region.startSample + (self.samplesMaxZoom * 0.05), self.totalSamples));
                 }
                 else if (self.drag){
                     //console.log("drag");
-                    if(self.isPlaying) {
-                        self.keepChrome = true;
-                        self.stop();
-                    }
                     let xSample = self.pxToSample(x);
                     self.updateBounds(multitrackPlayer.clamp(xSample - self.offSamples, 0, self.totalSamples - self.durationSamples - 1), multitrackPlayer.clamp(self.durationSamples + xSample - self.offSamples, self.durationSamples, self.totalSamples - 1));
                 }
-                
             }
         })
         this.shadow.getElementById("box-np-main").addEventListener('mouseup', function(e){
             if(self.clicking == true){
-                var bound = this.getBoundingClientRect();
-                if(self.moveStart){
-                    self.moveStart = false;
-                    self.moveEnd = false;  
-                    self.drag = false;  
-                    if(self.restartPoint < self.region.startSample) {
+                if(self.interaction == true){
+                    if(self.restartPoint < self.region.startSample || self.restartPoint >= self.region.endSample){
                         self.restartPoint = self.region.startSample;
-                        self.restartAt(self.region.startSample, false);
-                    }
-                    var isChrome = window.chrome;
-                    if(self.keepChrome){
-                        self.keepChrome = false;
-                        self.restartAt(self.region.startSample, true);
                     } 
                 }
-                else if (self.moveEnd){
-                    self.moveStart = false;
-                    self.moveEnd = false; 
-                    self.drag = false;
-                    if(self.restartPoint > self.region.endSample){
-                        self.restartPoint = self.region.startSample;
-                        self.restartAt(self.region.startSample, false);
-                    } 
-                    if(self.keepChrome){
-                        self.keepChrome = false;
-                        self.restartAt(self.region.startSample, true);
-                    } 
-                }
-                else if(self.drag){
-                    self.moveStart = false;
-                    self.moveEnd = false; 
-                    self.drag = false;
-
-                    if(self.restartPoint < self.region.startSample || self.restartPoint > self.region.endSample){
-                        self.restartPoint = self.region.startSample;
-                        self.restartAt(self.region.startSample, false);
-                    } 
-                    if(self.keepChrome){
-                        self.keepChrome = false;
-                        self.restartAt(self.region.startSample, true);
-                    } 
+                else{
+                    self.restartPoint = self.pxToSample(self.xInterction);
                 }
                 self.clicking = false;
+                self.interaction = false;
+                self.xInterction = null;
+
+                self.moveStart = false;
+                self.moveEnd = false; 
+                self.drag = false;
             }
+            console.log("restartPoint: " + self.restartPoint);
         })
         self.shadow.getElementById("box-np-main").style.opacity = 1;
     }
