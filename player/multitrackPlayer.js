@@ -114,7 +114,7 @@ template.innerHTML =
             </div>
         </div>
     </div>
-    <div id="output">
+    <div id="output" style="display:none;">
         <p>Channels<p>
         <p id="active-channels">0</p>
         <p>Region</p>
@@ -181,9 +181,7 @@ class multitrackPlayer extends HTMLElement{
         this.canvas.waveWidth = this.canvas.whole  - (this.canvas.whole / 12) ;
         this.canvas.waveHeight = this.canvas.waveWidth * this.heightMulti;
         
-        this.canvas.meterWidth = 0;
-        this.canvas.meterHeight = this.canvas.waveHeight;
-        
+
 
         this.canvas.analyserWidth = this.canvas.waveWidth + this.canvas.meterWidth;
         this.canvas.analyserHeight =  this.canvas.waveHeight *  this.analyserHeightMulti;
@@ -248,6 +246,9 @@ class multitrackPlayer extends HTMLElement{
         this.colors.trackRandomness = this.getAttribute('trackRandomnessRGB').split(',');
         this.colors.trackMuteBase = this.getAttribute('trackMuteBaseRGB').split(',');
         this.colors.trackMuteOriginal = this.getAttribute('trackMuteOriginalRGB').split(',');
+
+        this.colors.timeline = this.getAttribute('timelineRGB').split(',');
+
 
         this.font = this.getAttribute('font');
 
@@ -552,6 +553,9 @@ class multitrackPlayer extends HTMLElement{
       
 
     displayAndConnect(){
+        this.canvas.time = this.createCanvas("time", 0, this.canvas.waveWidth, this.canvas.waveHeight / 10); //timeline
+        this.canvas.time.pointsNumber = this.numberOfTimeMarkers;
+        
         var tracksDiv = this.shadow.getElementById('tracks');
         this.colors.tracks = new Array(this.source.buffer.numberOfChannels); 
         for(var i = 0; i < this.source.buffer.numberOfChannels; i++){
@@ -566,23 +570,18 @@ class multitrackPlayer extends HTMLElement{
         for(var i = 0; i < this.source.buffer.numberOfChannels; i++){
             var trackDiv = document.createElement('div');
             trackDiv.id = "track_" + i;
-            trackDiv.setAttribute("class", "col-md-12-h-100");
+            //trackDiv.setAttribute("class", "col-md-12-h-100");
             trackDiv.style.height = Number(this.canvas.waveHeight/ this.source.buffer.numberOfChannels).toFixed(0) + "px";
             tracksDiv.append(trackDiv);
         }        
         this.canvas.track = new Array(this.source.buffer.numberOfChannels);
-        this.canvas.meterHeight = this.canvas.waveHeight / this.source.buffer.numberOfChannels;
         this.createMutes(this.source.buffer);         //Create remaining audio nodes, about muting and routing
         for(var i = 0; i < this.source.buffer.numberOfChannels; i++){
             this.canvas.track[i] = {};
             this.canvas.track[i].muted = false; 
             this.canvas.track[i].wave = this.createCanvas("wave", i, this.canvas.waveWidth, this.canvas.waveHeight / this.source.buffer.numberOfChannels); //wave
-            //this.canvas.track[i].meter = this.createCanvas("trackMeter", i, this.canvas.meterWidth, this.canvas.meterHeight); //meter
         }
-        this.canvas.time = this.createCanvas("time", 0, this.canvas.waveWidth, this.canvas.waveHeight / 10); //timeline
-        this.canvas.time.pointsNumber = this.numberOfTimeMarkers;
         this.canvas.ui = this.createCanvas("ui", 0, this.canvas.waveWidth, this.canvas.waveHeight); //playehead
-        this.canvas.master = this.createCanvas("masterMeter", 0, this.canvas.meterWidth, this.canvas.meterHeight); //master meters
        
         //Calculate starting points and duration
         this.activeBufferDuration = this.currentBuffer.duration;
@@ -600,13 +599,11 @@ class multitrackPlayer extends HTMLElement{
         
         window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(this));     //start animation loop for drawPlayhead
        
-
-
         this.region.startSample = 0;
         this.region.endSample = this.totalSamples;
-        this.shadow.getElementById("region-start").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.startSample));
-        this.shadow.getElementById("region-end").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample));
-        this.shadow.getElementById("region-duration").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample - this.region.startSample));
+        this.shadow.getElementById("region-start").innerHTML = this.region.startSample;
+        this.shadow.getElementById("region-end").innerHTML = this.region.endSample;
+        this.shadow.getElementById("region-duration").innerHTML = this.region.endSample - this.region.startSample;
         this.shadow.getElementById("active-channels").innerHTML = this.audioContext.destination.channelCount;
   
         
@@ -660,31 +657,19 @@ class multitrackPlayer extends HTMLElement{
         newCanvas.height = h;
         if (type === "ui"){
             var uiDiv = this.shadow.getElementById('ui');
-            var waves = this.shadow.getElementById('wave0');
-            uiDiv.style.position = "absolute";
-            uiDiv.style.top = waves.offsetTop + "px";
-            uiDiv.style.left = waves.offsetLeft + "px";
             uiDiv.style.zIndex = "11";
             newCanvas.id = "uiCanvas";
-            //newCanvas.setAttribute("class", "col-md-8-h-100");
             uiDiv.appendChild(newCanvas);
         }
         else if (type === "time"){
             var timeDiv = this.shadow.getElementById('time');
-            var waves = this.shadow.getElementById('wave0');
-            timeDiv.style.position = "absolute";
-            //timeDiv.style.top = waves.offsetTop + "px";
-            timeDiv.style.left = waves.offsetLeft + "px";
-
             timeDiv.style.zIndex = "9";
             newCanvas.id = "timeCanvas";
-            //newCanvas.setAttribute("class", "col-md-8-h-100");
             timeDiv.appendChild(newCanvas);
         }
         else if (type === "analyser"){
             var analyserDiv = this.shadow.getElementById('analysers');
             newCanvas.id = "analyser" + index;
-            //newCanvas.setAttribute("class", "col-md-8-h-100");
             analyserDiv.appendChild(newCanvas);
         }
         else if (type === "masterMeter"){
@@ -696,13 +681,7 @@ class multitrackPlayer extends HTMLElement{
             var trackDiv = this.shadow.getElementById('track_' + index);
             if (type === "wave"){
                 newCanvas.id = "wave" + index;
-
-                newCanvas.setAttribute("class", "col-md-10-h-100");
-                trackDiv.appendChild(newCanvas);
-            }
-            else if (type === "trackMeter"){
-                newCanvas.id = "trackMeter" + index;
-                newCanvas.setAttribute("class", "col-md-1-h-100");
+                //newCanvas.setAttribute("class", "col-md-10-h-100");
                 trackDiv.appendChild(newCanvas);
             }
         }
@@ -1024,7 +1003,12 @@ class multitrackPlayer extends HTMLElement{
     static drawPlayhead() {
         self = this;
         var uiDiv = this.shadow.getElementById('ui');
+        var tracks = this.shadow.getElementById('tracks');
         var waves = this.shadow.getElementById('wave0');
+        var time = this.shadow.getElementById('time');
+        time.style.position = "absolute";
+        time.style.left = waves.offsetLeft + "px";
+        tracks.style.top = time.offsetTop + time.height + "px";
         uiDiv.style.position = "absolute";
         uiDiv.style.top = waves.offsetTop + "px";
         uiDiv.style.left = waves.offsetLeft + "px";
@@ -1050,10 +1034,11 @@ class multitrackPlayer extends HTMLElement{
 
         //TIMELINE
         this.canvas.time.clearRect(0,0,this.canvas.waveWidth, this.canvas.waveHeight / 10);
-        this.canvas.time.fillStyle = 'rgba(255, 255, 255, 1)';
-
+        this.canvas.time.fillStyle = 'rgb(' + this.colors.timeline[0] + ',' + this.colors.timeline[1] + ',' + this.colors.timeline[2] + ')';
+       
         for(var i = 0; i < this.canvas.time.pointsNumber; i++){
-            this.canvas.time.fillText(String(this.canvas.time.points[i]), i * (this.canvas.waveWidth / this.canvas.time.pointsNumber), this.canvas.waveHeight / 20);
+            this.canvas.time.fillRect(i * (this.canvas.waveWidth / this.canvas.time.pointsNumber), 0, 1, this.canvas.waveHeight / 20);
+            this.canvas.time.fillText(String(this.canvas.time.points[i]), 5 + i * (this.canvas.waveWidth / this.canvas.time.pointsNumber), this.canvas.waveHeight / 20);
         }
         /*
         for(var i = 0; i < this.canvas.waveWidth; i += (this.canvas.waveWidth / 6)){
@@ -1203,29 +1188,7 @@ class multitrackPlayer extends HTMLElement{
             else vol = this.trackMeters[i].volume;
             if (this.canvas.track[i].muted) muteLabel.style.backgroundColor = 'rgb(' + this.colors.tracks[i].muted[0] + ',' + this.colors.tracks[i].muted[1] + ',' + this.colors.tracks[i].muted[2] + ')';
             else muteLabel.style.backgroundColor = 'rgb(' + Number((this.colors.tracks[i].unmuted[0]) + (vol * this.colors.meterRange[0])) + ',' + Number((this.colors.tracks[i].unmuted[1]) + (vol * this.colors.meterRange[1])) + ',' + Number((this.colors.tracks[i].unmuted[2]) + (vol * this.colors.meterRange[2])) + ')';
-        }
-        console.log(this.trackMeters[0].volume -this.veryMax[0])
-
-        //Track Meters
-        /*
-        for(var i = 0; i < this.canvas.track.length; i++){
-            this.canvas.track[i].meter.clearRect(0,0, this.canvas.meterWidth, this.canvas.meterHeight);
-            
-            if(this.canvas.track[i].muted == true && isClipping == false) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.muted[0] + ',' + this.colors.meter.muted[1] + ',' + this.colors.meter.muted[2]  + ')';
-            if(this.canvas.track[i].muted == true && isClipping == true) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.mutedClipping[0] + ',' + this.colors.meter.mutedClipping[1] + ',' + this.colors.meter.mutedClipping[2]  + ')';
-            if(this.canvas.track[i].muted == false && isClipping == false) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.unmuted[0] + ',' + this.colors.meter.unmuted[1] + ',' + this.colors.meter.unmuted[2]  + ')';
-            if(this.canvas.track[i].muted == false && isClipping == true) this.canvas.track[i].meter.fillStyle = 'rgb(' + this.colors.meter.unmutedClipping[0] + ',' + this.colors.meter.unmutedClipping[1] + ',' + this.colors.meter.unmutedClipping[2]  + ')';
-            // draw a bar based on the current volume
-            this.canvas.track[i].meter.fillRect(0,  this.canvas.meterHeight - (this.canvas.meterHeight * 3 * this.trackMeters[i].volume),  this.canvas.meterWidth, this.canvas.meterHeight * 3 * this.trackMeters[i].volume );
-        }
-        */
-       
-        //Master Meter
-        this.canvas.master.clearRect(0,0, this.canvas.meterWidth, this.canvas.meterHeight);
-        if (this.masterMeter.checkClipping()) this.canvas.master.fillStyle = 'rgb(' + this.colors.meter.unmutedClipping[0] + ',' + this.colors.meter.unmutedClipping[1] + ',' + this.colors.meter.unmutedClipping[2]  + ')';
-        else  this.canvas.master.fillStyle = 'rgb(' + this.colors.meter.unmuted[0] + ',' + this.colors.meter.unmuted[1] + ',' + this.colors.meter.unmuted[2]  + ')';
-        // draw a bar based on the current volume
-        this.canvas.master.fillRect(0, this.canvas.meterHeight -( this.canvas.meterHeight * 3 * this.masterMeter.volume ),  this.canvas.meterWidth, this.canvas.meterHeight * 3 * this.masterMeter.volume );   
+        }       
         window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(this));
     };
 
@@ -1239,10 +1202,10 @@ class multitrackPlayer extends HTMLElement{
         this.restartPoint = this.region.startSample;
 
 
-        this.shadow.getElementById("region-start").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.startSample));
-        this.shadow.getElementById("region-end").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample));
-        this.shadow.getElementById("region-duration").innerHTML = multitrackPlayer.secToMin(this.sampleToSeconds(this.region.endSample - this.region.startSample));
-    }
+        this.shadow.getElementById("region-start").innerHTML = this.region.startSample;
+        this.shadow.getElementById("region-end").innerHTML = this.region.endSample;
+        this.shadow.getElementById("region-duration").innerHTML = this.region.endSample - this.region.startSample;
+   }
 
     //playPos in samples
     mettiPlay(playPos){
