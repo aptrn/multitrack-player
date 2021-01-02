@@ -551,7 +551,7 @@ class multitrackPlayer extends HTMLElement{
 
     async fetchData(url) {
         const response = await fetch(url);
-        console.log(response);
+        //console.log(response);
         const data = await response.json();
         return data;
     }
@@ -1727,7 +1727,7 @@ class multitrackPlayer extends HTMLElement{
                 self.moveEnd = false; 
                 self.drag = false;
             }
-            console.log("restartPoint: " + self.restartPoint);
+            //console.log("restartPoint: " + self.restartPoint);
         })
 
         document.addEventListener('keyup', multitrackPlayer.shortcutHandler, false);
