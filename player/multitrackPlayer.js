@@ -213,6 +213,7 @@ class multitrackPlayer extends HTMLElement{
         this.restartPoint = 0;
 
 
+        this.externalJson = this.getAttribute('waveformJSON');
         this.region = {};
         this.region.startSample = 0;
         this.region.endSample = 1;
@@ -438,6 +439,10 @@ class multitrackPlayer extends HTMLElement{
                 self.source.channelCount = self.audioContext.destination.channelCount;
                 self.currentBuffer = buffer;
                 self.source.buffer = buffer;
+                self.totalSamples = self.source.buffer.length;
+                self.startSample = 0;
+                self.spp = self.totalSamples / self.canvas.waveWidth;
+                self.samplesMaxZoom = self.totalSamples * self.maxZoomFactor;
                 self.updateChannels();
                 self.displayAndConnect();
             }, self.onDecodeError);
@@ -590,11 +595,24 @@ class multitrackPlayer extends HTMLElement{
         this.source.loopEnd = this.currentBuffer.duration;
         
         this.dataToDisplay = new Array (this.source.buffer.numberOfChannels);
-    
-        this.bufferData = this.bufferToJson(this.source.buffer);
-        this.dataToDisplay = this.analyzeData(this.bufferData, this.zoom, this.scroll, Number(this.canvas.waveWidth).toFixed(0), this.resolution);
-        this.displayBuffer(this, this.dataToDisplay); //Analyze buffer samples and draw them into first canvas
-
+        
+        if(this.externalJson == undefined){
+            this.bufferData = this.bufferToJson(this.source.buffer);
+            this.dataToDisplay = this.analyzeData(this.bufferData, this.zoom, this.scroll, Number(this.canvas.waveWidth).toFixed(0), this.resolution);
+            this.displayBuffer(this, this.dataToDisplay); //Analyze buffer samples and draw them into first canvas
+            this.isReady = true;
+        } 
+        else{
+            this.resolution = 1;
+            this.fetchData(this.externalJson).then(data => {
+                this.bufferData = this.preprocessExternalData(data);
+                this.originalSpp = data.samples_per_pixel;
+                this.dataToDisplay = this.analyzeExternalData(this.bufferData, this.zoom, this.scroll, Number(this.canvas.waveWidth).toFixed(0), this.originalSpp);
+                this.displayBuffer(this, this.dataToDisplay); //Analyze buffer samples and draw them into first canvas
+                this.isReady = true;
+              });
+        }
+     
         //this.download(this.bufferData, "dataToDisplay.json", "application/json");
         
         window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(this));     //start animation loop for drawPlayhead
@@ -901,23 +919,79 @@ class multitrackPlayer extends HTMLElement{
         return data;
     }
 
+    preprocessExternalData(data){
+        let output = new Array(data.channels);
+        for(let c = 0; c < output.length; c++){
+            let max = 0;
+            let min = 0;
+            for(let i = 0; i < data.data.length; i++){
+                max = Math.max(max, data.data[i]);
+                min = Math.min(min, data.data[i]);
+            }
+            output[c] = Array((data.data.length / data.channels) / 2);
+            for(let i = 0; i < output[c].length; i++){
+                output[c][i] = new Array(2);
+                output[c][i][0] = multitrackPlayer.map_range(data.data[(c * output[c].length) + (i * 2)], min, max, -1, 1);
+                output[c][i][1] = multitrackPlayer.map_range(data.data[(c * output[c].length) + (i * 2) + 1], min, max, -1, 1);
+            }
+        }
+        return output;
+    }
+
+    analyzeExternalData(extData, zoom, scroll, width, originalSpp){
+        let allChannels = new Array(extData.length);
+        this.veryMax = new Array(extData.length);
+        for(var c = 0; c < allChannels.length; c++){
+            var thisChannel = extData[c];
+            let pointsMinimumZoom = thisChannel.length;
+            let pointsMaxZoom = Number(thisChannel.length * this.maxZoomFactor).toFixed(0);
+            let pointsActualZoom = Number(multitrackPlayer.map_range(zoom, 0, 1, pointsMinimumZoom, pointsMaxZoom)).toFixed(0);
+            this.samplesActualZoom = Number(multitrackPlayer.map_range(zoom, 0, 1, this.totalSamples, this.totalSamples * this.maxZoomFactor)).toFixed(0);
+            this.spp = Number(this.samplesActualZoom / width).toFixed(0);   
+            let hereSpp = (pointsActualZoom / width);   
+  
+            let scrollSamples = Number(multitrackPlayer.map_range(scroll, 0, 1, 0, (thisChannel.length) - pointsActualZoom)).toFixed(0);
+            this.startSample = Number(scrollSamples * originalSpp);
+            let startSample = Number(scrollSamples);
+            //let skip = Math.ceil(this.spp / resolution );
+            let skip = (hereSpp / 1);
+            //console.log("skip: " + skip + " odiginalSpp: "  + " actualSpp: " + hereSpp +  " minimumZoom " + pointsMinimumZoom + " allSamples " + this.totalSamples);
+            
+            let data = new Array(width);
+            this.veryMax[c] = 0;
+            for(let i = 0; i < width; i++){
+                var min = 0;
+                var max = 0;
+                let pixelStartSample = startSample + (i * hereSpp);
+
+                for(let j = 0; j < hereSpp; j+= skip){
+                    var index = Number(pixelStartSample + j).toFixed(0);
+                    if (index < thisChannel.length){
+                        min = thisChannel[index][0];
+                        max = thisChannel[index][1];
+                        if(max > this.veryMax[c]) this.veryMax[c] = max;
+                    }
+                }
+                data[i] = [min, max];
+            }
+            allChannels[c] = data;
+        }
+        this.calculateTimelinePoints();
+        return allChannels;
+    }
+
         
     //buffer, 16, 1 , width, 1
     analyzeData(originalData, zoom, scroll, width, resolution) { 
-        this.ready = false;
         let allChannels = new Array(originalData.length);
         this.veryMax = new Array(originalData.length);
         for(var c = 0; c < originalData.length; c++){
             var thisChannel = originalData[c];
-            this.totalSamples = (thisChannel.length * 1);
-            this.samplesMinimumZoom = (thisChannel.length * 1);
-            this.samplesMaxZoom =  (thisChannel.length  * this.maxZoomFactor);
-            
-            
-            this.samplesActualZoom = multitrackPlayer.map_range(zoom, 0, 1, this.samplesMinimumZoom, this.samplesMaxZoom).toFixed(0);
-            this.spp = (this.samplesActualZoom / width).toFixed(0);   
-            let scrollSamples = multitrackPlayer.map_range(scroll, 0, 1, 0, this.totalSamples - this.samplesActualZoom).toFixed(0);
-            
+            let samplesMinimumZoom = thisChannel.length * 1;
+            let samplesMaxZoom = thisChannel.length * this.maxZoomFactor;
+            let samplesActualZoom = multitrackPlayer.map_range(zoom, 0, 1, samplesMinimumZoom, samplesMaxZoom).toFixed(0);
+            this.spp = (samplesActualZoom / width).toFixed(0);   
+            let scrollSamples = multitrackPlayer.map_range(scroll, 0, 1, 0, thisChannel.length - samplesActualZoom).toFixed(0);
             this.startSample = Number(scrollSamples);
             let skip = Math.ceil(this.spp / resolution);
             
@@ -942,7 +1016,6 @@ class multitrackPlayer extends HTMLElement{
             allChannels[c] = data;
         }
         this.calculateTimelinePoints();
-        this.ready = true;
         return allChannels;
     }
 
@@ -1001,194 +1074,194 @@ class multitrackPlayer extends HTMLElement{
     }
 
     static drawPlayhead() {
-        self = this;
-        var uiDiv = this.shadow.getElementById('ui');
-        var tracks = this.shadow.getElementById('tracks');
-        var waves = this.shadow.getElementById('wave0');
-        var time = this.shadow.getElementById('time');
-        time.style.position = "absolute";
-        time.style.left = waves.offsetLeft + "px";
-        tracks.style.top = time.offsetTop + time.height + "px";
-        uiDiv.style.position = "absolute";
-        uiDiv.style.top = waves.offsetTop + "px";
-        uiDiv.style.left = waves.offsetLeft + "px";
-        uiDiv.style.zIndex = "11";
-        
-        if(this.isPlaying){
-            this.shadowRoot.getElementById('btn-np-play').style.display = "none";
-            this.shadowRoot.getElementById('btn-np-pause').style.display = "inline-block";
-        } 
-        else{ 
-            this.shadowRoot.getElementById('btn-np-play').style.display = "inline-block";
-            this.shadowRoot.getElementById('btn-np-pause').style.display = "none";
-        }
-
-       
-
-        let startPx = this.sampleToPx(this.region.startSample);
-        let startPosition = startPx == true ? this.canvas.waveWidth : startPx == false ? 0 : startPx;
-
-        let endPx = this.sampleToPx(this.region.endSample);
-        let endPosition = endPx == true ? this.canvas.waveWidth : endPx == false ?  0 : endPx;
-
-
-        //TIMELINE
-        this.canvas.time.clearRect(0,0,this.canvas.waveWidth, this.canvas.waveHeight / 10);
-        this.canvas.time.fillStyle = 'rgb(' + this.colors.timeline[0] + ',' + this.colors.timeline[1] + ',' + this.colors.timeline[2] + ')';
-       
-        for(var i = 0; i < this.canvas.time.pointsNumber; i++){
-            this.canvas.time.fillRect(i * (this.canvas.waveWidth / this.canvas.time.pointsNumber), 0, 1, this.canvas.waveHeight / 20);
-            this.canvas.time.fillText(String(this.canvas.time.points[i]), 5 + i * (this.canvas.waveWidth / this.canvas.time.pointsNumber), this.canvas.waveHeight / 20);
-        }
-        /*
-        for(var i = 0; i < this.canvas.waveWidth; i += (this.canvas.waveWidth / 6)){
-            //this.canvas.time.strokeRect(i,0,i+1,this.canvas.waveHeight / 10);
-            let textTime = multitrackPlayer.secToMin(Number(this.pxToSample(i) / this.sampleRate));
-          //  console.log(textTime));
-            //let textTime = String(i);
-            this.canvas.time.fillText(String(textTime), i, this.canvas.waveHeight / 20);
-
-        }
-        */
-        
-        this.canvas.ui.clearRect(0,0, this.canvas.waveWidth, this.canvas.waveHeight);
-        this.canvas.ui.save();
-
-        if(this.ready == true) this.displayBuffer(this, this.dataToDisplay);
-
-        /*
-        //Start/End Labels
-        this.canvas.ui.fillStyle = 'rgba(0, 0, 0, 1)';
-        this.canvas.ui.textAlign = "left";
-        this.canvas.ui.fillText("0:00", 0, 20);
-        this.canvas.ui.textAlign = "right";
-        this.canvas.ui.fillText(Number(this.currentBuffer.duration / 60).toFixed(2).replace(/\./g, ":"), this.canvasWidth, 20);
-        */
-
-        //PLAYHEAD
-
-        this.now = this.audioContext.currentTime;
-        if(!this.isPlaying) this.startedAt = this.now;
-        let elapsed = this.now - this.startedAt;
-
-        if(!this.moveStart && !this.moveEnd && !this.drag){
-
-            this.playHeadSamples = this.secondsToSample(elapsed) + this.restartPoint;
-           
-            let playHeadPx = this.sampleToPx(this.playHeadSamples);
+        if(this.isReady){
+            self = this;
+            var uiDiv = this.shadow.getElementById('ui');
+            var tracks = this.shadow.getElementById('tracks');
+            var waves = this.shadow.getElementById('wave0');
+            var time = this.shadow.getElementById('time');
+            time.style.position = "absolute";
+            time.style.left = waves.offsetLeft + "px";
+            tracks.style.top = time.offsetTop + time.height + "px";
+            uiDiv.style.position = "absolute";
+            uiDiv.style.top = waves.offsetTop + "px";
+            uiDiv.style.left = waves.offsetLeft + "px";
+            uiDiv.style.zIndex = "11";
             
-            if(playHeadPx != true && playHeadPx != false){
-                this.canvas.ui.fillStyle = 'rgb('+ this.colors.playheadColor[0] +','+ this.colors.playheadColor[1] +','+ this.colors.playheadColor[2] +')';
-                this.canvas.ui.beginPath();
-                this.canvas.ui.moveTo(playHeadPx, 0);
-                this.canvas.ui.lineTo(playHeadPx, this.canvas.waveHeight);
-                this.canvas.ui.lineTo(playHeadPx + 4, this.canvas.waveHeight);
-                this.canvas.ui.lineTo(playHeadPx + 4, 0);
-                this.canvas.ui.closePath();
+            if(this.isPlaying){
+                this.shadowRoot.getElementById('btn-np-play').style.display = "none";
+                this.shadowRoot.getElementById('btn-np-pause').style.display = "inline-block";
+            } 
+            else{ 
+                this.shadowRoot.getElementById('btn-np-play').style.display = "inline-block";
+                this.shadowRoot.getElementById('btn-np-pause').style.display = "none";
+            }
+
+            let startPx = this.sampleToPx(this.region.startSample);
+            let startPosition = startPx == true ? this.canvas.waveWidth : startPx == false ? 0 : startPx;
+
+            let endPx = this.sampleToPx(this.region.endSample);
+            let endPosition = endPx == true ? this.canvas.waveWidth : endPx == false ?  0 : endPx;
+
+
+            //TIMELINE
+            this.canvas.time.clearRect(0,0,this.canvas.waveWidth, this.canvas.waveHeight / 10);
+            this.canvas.time.fillStyle = 'rgb(' + this.colors.timeline[0] + ',' + this.colors.timeline[1] + ',' + this.colors.timeline[2] + ')';
+        
+            for(var i = 0; i < this.canvas.time.pointsNumber; i++){
+                this.canvas.time.fillRect(i * (this.canvas.waveWidth / this.canvas.time.pointsNumber), 0, 1, this.canvas.waveHeight / 20);
+                this.canvas.time.fillText(String(this.canvas.time.points[i]), 5 + i * (this.canvas.waveWidth / this.canvas.time.pointsNumber), this.canvas.waveHeight / 20);
+            }
+            /*
+            for(var i = 0; i < this.canvas.waveWidth; i += (this.canvas.waveWidth / 6)){
+                //this.canvas.time.strokeRect(i,0,i+1,this.canvas.waveHeight / 10);
+                let textTime = multitrackPlayer.secToMin(Number(this.pxToSample(i) / this.sampleRate));
+            //  console.log(textTime));
+                //let textTime = String(i);
+                this.canvas.time.fillText(String(textTime), i, this.canvas.waveHeight / 20);
+
+            }
+            */
+            
+            this.canvas.ui.clearRect(0,0, this.canvas.waveWidth, this.canvas.waveHeight);
+            this.canvas.ui.save();
+
+            this.displayBuffer(this, this.dataToDisplay);
+
+            /*
+            //Start/End Labels
+            this.canvas.ui.fillStyle = 'rgba(0, 0, 0, 1)';
+            this.canvas.ui.textAlign = "left";
+            this.canvas.ui.fillText("0:00", 0, 20);
+            this.canvas.ui.textAlign = "right";
+            this.canvas.ui.fillText(Number(this.currentBuffer.duration / 60).toFixed(2).replace(/\./g, ":"), this.canvasWidth, 20);
+            */
+
+            //PLAYHEAD
+
+            this.now = this.audioContext.currentTime;
+            if(!this.isPlaying) this.startedAt = this.now;
+            let elapsed = this.now - this.startedAt;
+
+            if(!this.moveStart && !this.moveEnd && !this.drag){
+
+                this.playHeadSamples = this.secondsToSample(elapsed) + this.restartPoint;
+            
+                let playHeadPx = this.sampleToPx(this.playHeadSamples);
+                
+                if(playHeadPx != true && playHeadPx != false){
+                    this.canvas.ui.fillStyle = 'rgb('+ this.colors.playheadColor[0] +','+ this.colors.playheadColor[1] +','+ this.colors.playheadColor[2] +')';
+                    this.canvas.ui.beginPath();
+                    this.canvas.ui.moveTo(playHeadPx, 0);
+                    this.canvas.ui.lineTo(playHeadPx, this.canvas.waveHeight);
+                    this.canvas.ui.lineTo(playHeadPx + 4, this.canvas.waveHeight);
+                    this.canvas.ui.lineTo(playHeadPx + 4, 0);
+                    this.canvas.ui.closePath();
+                    this.canvas.ui.fill();
+                }
+            }
+
+            //BRIGHT
+            this.canvas.ui.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            this.canvas.ui.beginPath();
+            this.canvas.ui.fillRect(Math.max(startPosition, 0), 0, Math.min(endPosition - startPosition, this.canvas.waveWidth), this.canvas.waveHeight)
+            
+
+            this.canvas.ui.fillStyle = 'rgb('+ this.colors.uiColor[0] +','+ this.colors.uiColor[1] +','+ this.colors.uiColor[2] +')';
+            
+            //START HANDLE
+            if(startPosition != true && startPosition != false){
+                this.canvas.ui.rect(startPosition - (this.canvas.waveWidth * 0.01), 0, (this.canvas.waveWidth * 0.01), this.canvas.waveHeight);
                 this.canvas.ui.fill();
             }
-        }
-
-        //BRIGHT
-        this.canvas.ui.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        this.canvas.ui.beginPath();
-        this.canvas.ui.fillRect(Math.max(startPosition, 0), 0, Math.min(endPosition - startPosition, this.canvas.waveWidth), this.canvas.waveHeight)
-        
-
-        this.canvas.ui.fillStyle = 'rgb('+ this.colors.uiColor[0] +','+ this.colors.uiColor[1] +','+ this.colors.uiColor[2] +')';
-        
-        //START HANDLE
-        if(startPosition != true && startPosition != false){
-            this.canvas.ui.rect(startPosition - (this.canvas.waveWidth * 0.01), 0, (this.canvas.waveWidth * 0.01), this.canvas.waveHeight);
-            this.canvas.ui.fill();
-        }
-        
-        //END HANDLE
-        if(endPosition != true && endPosition != false){
-            this.canvas.ui.rect(endPosition , 0, (this.canvas.waveWidth * 0.01), this.canvas.waveHeight);
-            this.canvas.ui.fill();
-        }
-
-         /*
-        //START LABEL RECT
-        this.canvas.ui.fillRect(startPosition, 0, 40, 30)
-        multitrackPlayer.fillRoundRect(this.canvas.ui, startPosition, 0, 50, 30, 10);
-
-        //END LABEL RECT
-        this.canvas.ui.fillRect(endPosition - 40, 0, 40, 30)
-        multitrackPlayer.fillRoundRect(this.canvas.ui, endPosition - 50, 0, 50, 30, 10);
-
-    
-        this.canvas.ui.font = this.font;
-        var startText = multitrackPlayer.secToMin(this.source.loopStart);
-        var endText = multitrackPlayer.secToMin(this.source.loopEnd);
-      
-       
-        //START LABEL
-        this.canvas.ui.textAlign = "left";
-        this.canvas.ui.fillStyle = 'rgb('+ this.colors.textColor[0] +','+ this.colors.textColor[1] +','+ this.colors.textColor[2] +')';
-        this.canvas.ui.fillText(startText, startPosition, 20);
-        //this.canvas.ui.fillText(String(Number(this.source.loopStart / 60).toFixed(0)) + ":" + String(Number(this.source.loopStart % 60).toFixed(0)), startPosition, 20);
-        
-        
-        //END LABEL
-        this.canvas.ui.textAlign = "right";
-        this.canvas.ui.fillText(endText, endPosition, 20); 
-        */
-
-        
-        this.canvas.ui.restore();
-
-
-        //FREQ ANALYSER
-
-        
-        
-        var freqData = new Uint8Array(this.analyser.frequencyBinCount);
-        this.analyser.getByteFrequencyData(freqData);      
-        var scaling = this.canvas.analyserHeight / 256;
-        var space = (this.canvas.analyserWidth * (this.source.buffer.numberOfChannels + 1))/ freqData.length;
-        var xPos = 0;
-        
-        this.canvas.analyser.clearRect(0,0, this.canvas.analyserWidth, this.canvas.analyserHeight);
-        
-        this.canvas.analyser.fillStyle =  'rgb(' + this.colors.analyzerBackground[0] + ',' + this.colors.analyzerBackground[1] + ',' + this.colors.analyzerBackground[2]  + ')';
-        this.canvas.analyser.fillRect(0, 0, this.canvas.analyserWidth, this.canvas.analyserHeight);
-        
-        this.canvas.analyser.strokeStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
-        this.canvas.analyser.fillStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
-        
-        if (this.colors.analyserStyle == "bars"){
-            for (var x = 0; x < this.canvas.analyserWidth; x++){
-                xPos = x * space;
-                var barHeight = freqData[x] * scaling;
-                this.canvas.analyser.fillRect(xPos, this.canvas.analyserHeight - barHeight, space, barHeight);
-             }
-        }
-        else if (this.colors.analyserStyle == "line"){
-            this.canvas.analyser.lineWidth = 2;
-            this.canvas.analyser.beginPath();
-            this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight);
-            for (var x = 0; x < this.canvas.analyserWidth; x++){
-                xPos = x * space;
-                var barHeight = freqData[x] * scaling;
-                this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight - barHeight);
+            
+            //END HANDLE
+            if(endPosition != true && endPosition != false){
+                this.canvas.ui.rect(endPosition , 0, (this.canvas.waveWidth * 0.01), this.canvas.waveHeight);
+                this.canvas.ui.fill();
             }
-            this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight);
-            this.canvas.analyser.lineTo(0, this.canvas.analyserHeight);
-            this.canvas.analyser.stroke();
-            this.canvas.analyser.fill();
-        }
-        //Mute Colors
-        for(var i = 0; i < this.canvas.track.length; i++){
-            var muteLabel = this.shadow.getElementById('muteLabel_' + i);
-            var isClipping = this.trackMeters[i].checkClipping();
-            var vol;
-            if(this.scaleMeters == true) vol = multitrackPlayer.map_range(this.trackMeters[i].volume, 0, this.veryMax[i], 0, 1);
-            else vol = this.trackMeters[i].volume;
-            if (this.canvas.track[i].muted) muteLabel.style.backgroundColor = 'rgb(' + this.colors.tracks[i].muted[0] + ',' + this.colors.tracks[i].muted[1] + ',' + this.colors.tracks[i].muted[2] + ')';
-            else muteLabel.style.backgroundColor = 'rgb(' + Number((this.colors.tracks[i].unmuted[0]) + (vol * this.colors.meterRange[0])) + ',' + Number((this.colors.tracks[i].unmuted[1]) + (vol * this.colors.meterRange[1])) + ',' + Number((this.colors.tracks[i].unmuted[2]) + (vol * this.colors.meterRange[2])) + ')';
-        }       
+
+            /*
+            //START LABEL RECT
+            this.canvas.ui.fillRect(startPosition, 0, 40, 30)
+            multitrackPlayer.fillRoundRect(this.canvas.ui, startPosition, 0, 50, 30, 10);
+
+            //END LABEL RECT
+            this.canvas.ui.fillRect(endPosition - 40, 0, 40, 30)
+            multitrackPlayer.fillRoundRect(this.canvas.ui, endPosition - 50, 0, 50, 30, 10);
+
+        
+            this.canvas.ui.font = this.font;
+            var startText = multitrackPlayer.secToMin(this.source.loopStart);
+            var endText = multitrackPlayer.secToMin(this.source.loopEnd);
+        
+        
+            //START LABEL
+            this.canvas.ui.textAlign = "left";
+            this.canvas.ui.fillStyle = 'rgb('+ this.colors.textColor[0] +','+ this.colors.textColor[1] +','+ this.colors.textColor[2] +')';
+            this.canvas.ui.fillText(startText, startPosition, 20);
+            //this.canvas.ui.fillText(String(Number(this.source.loopStart / 60).toFixed(0)) + ":" + String(Number(this.source.loopStart % 60).toFixed(0)), startPosition, 20);
+            
+            
+            //END LABEL
+            this.canvas.ui.textAlign = "right";
+            this.canvas.ui.fillText(endText, endPosition, 20); 
+            */
+
+            
+            this.canvas.ui.restore();
+
+
+            //FREQ ANALYSER
+
+            
+            
+            var freqData = new Uint8Array(this.analyser.frequencyBinCount);
+            this.analyser.getByteFrequencyData(freqData);      
+            var scaling = this.canvas.analyserHeight / 256;
+            var space = (this.canvas.analyserWidth * (this.source.buffer.numberOfChannels + 1))/ freqData.length;
+            var xPos = 0;
+            
+            this.canvas.analyser.clearRect(0,0, this.canvas.analyserWidth, this.canvas.analyserHeight);
+            
+            this.canvas.analyser.fillStyle =  'rgb(' + this.colors.analyzerBackground[0] + ',' + this.colors.analyzerBackground[1] + ',' + this.colors.analyzerBackground[2]  + ')';
+            this.canvas.analyser.fillRect(0, 0, this.canvas.analyserWidth, this.canvas.analyserHeight);
+            
+            this.canvas.analyser.strokeStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
+            this.canvas.analyser.fillStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
+            
+            if (this.colors.analyserStyle == "bars"){
+                for (var x = 0; x < this.canvas.analyserWidth; x++){
+                    xPos = x * space;
+                    var barHeight = freqData[x] * scaling;
+                    this.canvas.analyser.fillRect(xPos, this.canvas.analyserHeight - barHeight, space, barHeight);
+                }
+            }
+            else if (this.colors.analyserStyle == "line"){
+                this.canvas.analyser.lineWidth = 2;
+                this.canvas.analyser.beginPath();
+                this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight);
+                for (var x = 0; x < this.canvas.analyserWidth; x++){
+                    xPos = x * space;
+                    var barHeight = freqData[x] * scaling;
+                    this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight - barHeight);
+                }
+                this.canvas.analyser.lineTo(xPos, this.canvas.analyserHeight);
+                this.canvas.analyser.lineTo(0, this.canvas.analyserHeight);
+                this.canvas.analyser.stroke();
+                this.canvas.analyser.fill();
+            }
+            //Mute Colors
+            for(var i = 0; i < this.canvas.track.length; i++){
+                var muteLabel = this.shadow.getElementById('muteLabel_' + i);
+                var isClipping = this.trackMeters[i].checkClipping();
+                var vol;
+                if(this.scaleMeters == true) vol = multitrackPlayer.map_range(this.trackMeters[i].volume, 0, this.veryMax[i], 0, 1);
+                else vol = this.trackMeters[i].volume;
+                if (this.canvas.track[i].muted) muteLabel.style.backgroundColor = 'rgb(' + this.colors.tracks[i].muted[0] + ',' + this.colors.tracks[i].muted[1] + ',' + this.colors.tracks[i].muted[2] + ')';
+                else muteLabel.style.backgroundColor = 'rgb(' + Number((this.colors.tracks[i].unmuted[0]) + (vol * this.colors.meterRange[0])) + ',' + Number((this.colors.tracks[i].unmuted[1]) + (vol * this.colors.meterRange[1])) + ',' + Number((this.colors.tracks[i].unmuted[2]) + (vol * this.colors.meterRange[2])) + ')';
+            }     
+        }  
         window.requestAnimationFrame(multitrackPlayer.drawPlayhead.bind(this));
     };
 
@@ -1304,14 +1377,19 @@ class multitrackPlayer extends HTMLElement{
         });
         this.shadowRoot.getElementById('zoomSlider').addEventListener('change', function() {
             self.zoom = this.value;
-            self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            
+            if(self.externalJson == 'undefined' || self.externalJson == null) self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            else self.dataToDisplay = self.analyzeExternalData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.originalSpp);
+           
             var label = self.shadow.getElementById("zoom-value");
             label.innerHTML = this.value + "%";
         });
         this.shadowRoot.getElementById('zoomSlider').addEventListener("dblclick", function(){  
             this.value = this.defaultValue;
             self.zoom = this.value;
-            self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            if(self.externalJson == 'undefined' || self.externalJson == null) self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            else self.dataToDisplay = self.analyzeExternalData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.originalSpp);
+           
             var label = self.shadow.getElementById("zoom-value");
             label.innerHTML = this.value + "%";
         });
@@ -1319,14 +1397,18 @@ class multitrackPlayer extends HTMLElement{
             self.scroll = this.value;
             var label = self.shadow.getElementById("scroll-value");
             label.innerHTML = this.value + "%";
-            self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            if(self.externalJson == 'undefined' || self.externalJson == null) self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            else self.dataToDisplay = self.analyzeExternalData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.originalSpp);
+           
         });
         this.shadowRoot.getElementById('scrollSlider').addEventListener('dblclick', function() {
             this.value = this.defaultValue;
             self.scroll = this.value;
             var label = self.shadow.getElementById("scroll-value");
             label.innerHTML = this.value + "%";
-            self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            if(self.externalJson == 'undefined' || self.externalJson == null) self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+            else self.dataToDisplay = self.analyzeExternalData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.originalSpp);
+           
         });
         this.shadowRoot.getElementById('rotation').addEventListener('change', function() {
             if(self.encoding === "B-Format"){
