@@ -177,6 +177,7 @@ class multitrackPlayer extends HTMLElement{
         this.context = new Array(2);
         this.canvas = {};
         this.canvas.whole = this.shadowRoot.querySelector('#box-np-main').scrollWidth * this.widthMulti;
+        this.normalizeWave = this.getAttribute('normalizeWave');
         //
         this.canvas.waveWidth = this.canvas.whole  - (this.canvas.whole / 12) ;
         this.canvas.waveHeight = this.canvas.waveWidth * this.heightMulti;
@@ -914,7 +915,25 @@ class multitrackPlayer extends HTMLElement{
     bufferToJson(buff){
         let data = new Array(buff.numberOfChannels);
         for(var c = 0; c < buff.numberOfChannels; c++){
-            data[c] = buff.getChannelData(c);
+            let thisChannel =  buff.getChannelData(c);
+            if(this.normalizeWave == 'true'){
+                let max = 0;
+                let min = 0;
+                for(let i = 0; i < thisChannel.length; i++){
+                    max = Math.max(max, thisChannel[i]);
+                    min = Math.min(min, thisChannel[i]);
+                }
+                data[c] = new Array(thisChannel.length);
+                for(let i = 0; i < thisChannel.length; i++){
+                    data[c][i] = multitrackPlayer.map_range(thisChannel[i], min, max, -1, 1);
+                }
+            }
+            else{
+                data[c] = new Array(thisChannel.length);
+                for(let i = 0; i < thisChannel.length; i++){
+                    data[c][i] = thisChannel[i];
+                }
+            }
         }
         return data;
     }
