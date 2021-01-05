@@ -184,7 +184,7 @@ class multitrackPlayer extends HTMLElement{
         
 
 
-        this.canvas.analyserWidth = this.canvas.waveWidth + this.canvas.meterWidth;
+        this.canvas.analyserWidth = this.canvas.waveWidth;
         this.canvas.analyserHeight =  this.canvas.waveHeight *  this.analyserHeightMulti;
 
         //console.log(this.canvas.analyserWidth);
