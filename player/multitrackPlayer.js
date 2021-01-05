@@ -1673,6 +1673,7 @@ class multitrackPlayer extends HTMLElement{
         this.shadow.getElementById("ui").addEventListener('mousedown', function(e){
             var bound = this.getBoundingClientRect();
             var x = e.clientX - bound.left;
+            console.log(x)
             if(self.isPlaying) self.stop();
             self.clicking = true;
             self.xInterction = x;
@@ -1711,7 +1712,7 @@ class multitrackPlayer extends HTMLElement{
                 self.interaction = true;
                 var bound = this.getBoundingClientRect();
                 var uiBound = self.shadow.getElementById("ui").getBoundingClientRect();
-                var x = e.clientX - bound.left - uiBound.left;     
+                var x = e.clientX - uiBound.left;     
                 if(self.moveStart){
                     //console.log("move start");
                     self.updateBounds(multitrackPlayer.clamp(self.pxToSample(x), 0, self.region.endSample - (self.samplesMaxZoom * 0.05)), self.region.endSample);
