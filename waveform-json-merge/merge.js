@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 function mergeWaveforms(jsons){
     let output = {};
     output.channels = jsons.length;
@@ -10,15 +13,15 @@ function mergeWaveforms(jsons){
     return output;
 }
 
-const fs = require('fs');
-const path = require('path');
-
-function init(dir) {
+function loadFolder(dir) {
   return fs.readdirSync(dir)
            .filter(name => path.extname(name) === '.json')
            .map(name => require(path.join(dir, name)));
 }
 
-const data = init('../assets/pre/')
+//first argument is the folder to load json from
+const data = loadFolder('../assets/pre/')
 let out = JSON.stringify(mergeWaveforms(data), "", 2);
+
+//first argument is the output path+filename
 fs.writeFile('../assets/post/merged.json', out , 'utf8', function(){});
