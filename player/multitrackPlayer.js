@@ -941,17 +941,17 @@ class multitrackPlayer extends HTMLElement{
     preprocessExternalData(data){
         let output = new Array(data.channels);
         for(let c = 0; c < output.length; c++){
+            output[c] = Array(data.data[c].length / 2);
             let max = 0;
             let min = 0;
-            for(let i = 0; i < data.data.length; i++){
-                max = Math.max(max, data.data[i]);
-                min = Math.min(min, data.data[i]);
+            for(let i = 0; i < output[c].length; i++){
+                max = Math.max(max, data.data[c][i]);
+                min = Math.min(min, data.data[c][i]);
             }
-            output[c] = Array((data.data.length / data.channels) / 2);
             for(let i = 0; i < output[c].length; i++){
                 output[c][i] = new Array(2);
-                output[c][i][0] = multitrackPlayer.map_range(data.data[(c * output[c].length) + (i * 2)], min, max, -1, 1);
-                output[c][i][1] = multitrackPlayer.map_range(data.data[(c * output[c].length) + (i * 2) + 1], min, max, -1, 1);
+                output[c][i][0] = multitrackPlayer.map_range(data.data[c][(i * 2)], min, max, -1, 1);
+                output[c][i][1] = multitrackPlayer.map_range(data.data[c][(i * 2) + 1], min, max, -1, 1);
             }
         }
         return output;
