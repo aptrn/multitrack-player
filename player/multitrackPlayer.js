@@ -499,7 +499,7 @@ class multitrackPlayer extends HTMLElement{
             this.splitComp = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
             this.mergeComp = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
             this.eq[this.eq.length - 1].connect(this.splitComp);
-            if(this.compressore.enabled){
+            if(this.compressore.enabled == 'true'){
                 for(var c = 0; c < this.compressor.length; c++){
                     this.splitComp.connect(this.compressor[c], c, 0);
                     this.compressor[c].connect(this.mergeComp[c], 0, c);
@@ -510,7 +510,7 @@ class multitrackPlayer extends HTMLElement{
             this.splitLim = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
             this.mergeLim = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
             this.mergeComp.connect(this.splitLim);
-            if(this.limiterParameters.enabled){
+            if(this.limiterParameters.enabled == 'true'){
                 for(var c = 0; c < this.limiter.length; c++){
                     this.splitLim.connect(this.limiter[c], c, 0);
                     this.limiter[c].connect(this.mergeLim[c], 0, c);
@@ -639,6 +639,7 @@ class multitrackPlayer extends HTMLElement{
             }
             else this.eq[i].connect(this.eq[i + 1]);   //Connect eq in series
         }
+        console.log("Detected active channels: " + this.audioContext.destination.channelCount + " / " + this.audioContext.destination.maxChannelCount);
         this.updateOutput();
         if(this._authorized === 'true'){        //If the user is authorized connect multichannel out
             this.gain.connect(this.audioContext.destination);
@@ -657,7 +658,6 @@ class multitrackPlayer extends HTMLElement{
         this.addCallbacks();    //Adds UI callbacks
 
         //DEBUG LOG
-        console.log("Detected active channels: " + this.audioContext.destination.channelCount + " / " + this.audioContext.destination.maxChannelCount);
         console.log("buffer: " + this.source.buffer.numberOfChannels);
         console.log("source: " + this.source.channelCount);
         console.log("muteSplitter: " + this.muteSplitter.channelCount);
@@ -1408,6 +1408,14 @@ class multitrackPlayer extends HTMLElement{
         });
         this.shadowRoot.getElementById('btn-np-autoscroll').addEventListener('click', function() {
             self.autoscroll = this.checked;
+            if(self.autoscroll == true){
+                self.shadowRoot.getElementById('scrollSlider').style.display = "none";
+                self.shadowRoot.getElementById('scroll-value').style.display = "none";
+            }
+            else {
+                self.shadowRoot.getElementById('scrollSlider').style.display = "block";
+                self.shadowRoot.getElementById('scroll-value').style.display = "block";
+            }
         });
         this.shadowRoot.getElementById('zoomSlider').addEventListener('change', function() {
             self.zoom = this.value;
