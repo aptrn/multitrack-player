@@ -38,6 +38,7 @@ template.innerHTML =
             <p>scroll</p>
             <input  type="range" id="scrollSlider"min="0" max="1" value="0" step="0.01"></input>
             <p id="scroll-value">0%</p>
+            <input id="btn-np-autoscroll" type="checkbox"> Auto-Scroll</input>
             </div>
             <div id="rotationDiv" class="col-md-2">
                 <input type="range" id="rotation"  min="0" max="1" value="0.5" step="0.01"></input>
@@ -212,6 +213,7 @@ class multitrackPlayer extends HTMLElement{
         this.loop = false;
         this.isPlaying = false;
         this.restartPoint = 0;
+        this.autoscroll = false;
 
 
         this.externalJson = this.getAttribute('waveformJSON');
@@ -1142,11 +1144,10 @@ class multitrackPlayer extends HTMLElement{
             }
             */
             
-            this.canvas.ui.clearRect(0,0, this.canvas.waveWidth, this.canvas.waveHeight);
-            this.canvas.ui.save();
+           this.canvas.ui.clearRect(0,0, this.canvas.waveWidth, this.canvas.waveHeight);
+           this.canvas.ui.save();
 
-            this.displayBuffer(this, this.dataToDisplay);
-
+  
             /*
             //Start/End Labels
             this.canvas.ui.fillStyle = 'rgba(0, 0, 0, 1)';
@@ -1165,7 +1166,15 @@ class multitrackPlayer extends HTMLElement{
             if(!this.moveStart && !this.moveEnd && !this.drag){
 
                 this.playHeadSamples = this.secondsToSample(elapsed) + this.restartPoint;
-            
+
+                if(this.autoscroll == true && this.isPlaying == true){
+                    let n = this.playHeadSamples;
+                    this.shadowRoot.getElementById('scrollSlider').value +=  multitrackPlayer.map_range(n, 0, this.totalSamples, 0, 1);
+                    this.scroll = multitrackPlayer.map_range(n, 0, this.totalSamples, 0, 1);
+                    if(self.externalJson == 'undefined' || self.externalJson == null) self.dataToDisplay = self.analyzeData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.resolution);
+                    else self.dataToDisplay = self.analyzeExternalData(self.bufferData, self.zoom, self.scroll, Number(self.canvas.waveWidth).toFixed(0), self.originalSpp);        
+                }
+
                 let playHeadPx = this.sampleToPx(this.playHeadSamples);
                 
                 if(playHeadPx != true && playHeadPx != false){
@@ -1179,6 +1188,9 @@ class multitrackPlayer extends HTMLElement{
                     this.canvas.ui.fill();
                 }
             }
+
+            this.displayBuffer(this, this.dataToDisplay);
+
 
             //BRIGHT
             this.canvas.ui.fillStyle = 'rgba(255, 255, 255, 0.2)';
@@ -1393,6 +1405,9 @@ class multitrackPlayer extends HTMLElement{
         this.shadowRoot.getElementById('btn-np-loop').addEventListener('click', function() {
             self.loop = this.checked;
             self.source.loop = self.loop;
+        });
+        this.shadowRoot.getElementById('btn-np-autoscroll').addEventListener('click', function() {
+            self.autoscroll = this.checked;
         });
         this.shadowRoot.getElementById('zoomSlider').addEventListener('change', function() {
             self.zoom = this.value;
