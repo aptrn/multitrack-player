@@ -336,6 +336,7 @@ class multitrackPlayer extends HTMLElement{
     createAudioNodes(){
         this.createEq();
         this.preGain = this.audioContext.createGain();                              //first gain process after input
+        this.preGain.channelCount = this.audioContext.destination.channelCount;
         this.preGain.gain.setValueAtTime(this.preGainValue, this.audioContext.currentTime);
         this.gain = this.audioContext.createGain();                                //last gain process before output
         this.gain.channelCount = this.audioContext.destination.channelCount;
@@ -344,10 +345,10 @@ class multitrackPlayer extends HTMLElement{
         this.lp.type = "lowpass";
         this.lp.frequency.setValueAtTime(20000, this.audioContext.currentTime);
         this.hp = this.audioContext.createBiquadFilter();                          //hipass filter
+        this.hp.channelCount = this.audioContext.destination.channelCount;
         this.hp.type = "highpass";
         this.hp.frequency.setValueAtTime(20, this.audioContext.currentTime);
-
-        this.compressor = new Array(this.audioContext.destination.channelCount);   //create array of mono compressors since each node can't handle more than 2 channels
+        this.compressor = new Array(this.audioContext.destination.maxChannelCount);   //create array of mono compressors since each node can't handle more than 2 channels
         if(this.compressore.enabled == 'true'){
             for(var i = 0; i < this.audioContext.destination.channelCount; i++){
                 this.compressor[i] = this.audioContext.createDynamicsCompressor();
@@ -356,7 +357,7 @@ class multitrackPlayer extends HTMLElement{
             }
         }
 
-        this.limiter = new Array(this.audioContext.destination.channelCount);   //create array of mono compressors since each node can't handle more than 2 channels
+        this.limiter = new Array(this.audioContext.destination.maxChannelCount);   //create array of mono compressors since each node can't handle more than 2 channels
         if(this.limiterParameters.enabled == 'true'){
             for(var i = 0; i < this.audioContext.destination.channelCount; i++){
                 this.limiter[i] = this.audioContext.createDynamicsCompressor();
@@ -454,15 +455,18 @@ class multitrackPlayer extends HTMLElement{
 
    
     updateChannels(){                                                                //Update channel count for audio nodes
+        console.log("def chan count: " + this.audioContext.destination.channelCount);
         this.source.channelCount = this.audioContext.destination.channelCount;
+        for(let e = 0; e < this.eq.length; e++) this.eq[e].channelCount = this.audioContext.destination.channelCount;
         this.gain.channelCount = this.audioContext.destination.channelCount;
         this.lp.channelCount = this.audioContext.destination.channelCount;
+        this.hp.channelCount = this.audioContext.destination.channelCount;
         this.compressor = new Array(this.audioContext.destination.channelCount);
         this.limiter = new Array(this.audioContext.destination.channelCount);
 
         //console.log("compressore: " + this.compressore.enabled);
         if(this.compressore.enabled == 'true'){
-            //console.log("qui!");
+            console.log("qui!");
             for(var i = 0; i < this.audioContext.destination.channelCount; i++){
                 this.compressor[i] = this.audioContext.createDynamicsCompressor();
                 this.compressor[i].channelCountMode = "explicit";
@@ -498,28 +502,36 @@ class multitrackPlayer extends HTMLElement{
         if(this.audioContext.destination.channelCount > 2){   //Connect multichannel eq out to single channel compressors and merge output in a single post-compression multichannel signal
             this.splitComp = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
             this.mergeComp = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
+            this.splitComp.channelCount = this.audioContext.destination.channelCount;
+            
             this.eq[this.eq.length - 1].connect(this.splitComp);
             if(this.compressore.enabled == 'true'){
                 for(var c = 0; c < this.compressor.length; c++){
                     this.splitComp.connect(this.compressor[c], c, 0);
-                    this.compressor[c].connect(this.mergeComp[c], 0, c);
+                    this.compressor[c].connect(this.mergeComp, 0, c);
                 }
             }
-            else this.splitComp.connect(this.mergeComp); 
-            
+            else {
+                for(let i = 0; i < this.source.buffer.numberOfChannels; i++){
+                    this.splitComp.connect(this.mergeComp, i, i); 
+                }
+            }
             this.splitLim = this.audioContext.createChannelSplitter(this.source.buffer.numberOfChannels);
             this.mergeLim = this.audioContext.createChannelMerger(this.audioContext.destination.channelCount);
+            this.splitLim.channelCount = this.audioContext.destination.channelCount;
             this.mergeComp.connect(this.splitLim);
             if(this.limiterParameters.enabled == 'true'){
                 for(var c = 0; c < this.limiter.length; c++){
                     this.splitLim.connect(this.limiter[c], c, 0);
-                    this.limiter[c].connect(this.mergeLim[c], 0, c);
+                    this.limiter[c].connect(this.mergeLim, 0, c);
                 }
             }
-            else this.splitLim.connect(this.mergeLim); 
-            
+            else {
+                for(let i = 0; i < this.source.buffer.numberOfChannels; i++){
+                    this.splitLim.connect(this.mergeLim, i, i);
+                }
+            }
             this.mergeLim.connect(this.gain);
-            
         }
         else{  //Connect stereo eq out to stereo compressor
             this.postComp = this.audioContext.createGain();
@@ -641,8 +653,9 @@ class multitrackPlayer extends HTMLElement{
         }
         console.log("Detected active channels: " + this.audioContext.destination.channelCount + " / " + this.audioContext.destination.maxChannelCount);
         this.updateOutput();
-        if(this._authorized === 'true'){        //If the user is authorized connect multichannel out
+        if(this._authorized == 'true'){        //If the user is authorized connect multichannel out
             this.gain.connect(this.audioContext.destination);
+            this.mergeLim.connect(this.audioContext.destination);
         } 
         else{                                   //If the user is not authorized merge to mono and connect to speakers
             this.monoMerge = this.audioContext.createChannelMerger(1);
@@ -846,7 +859,7 @@ class multitrackPlayer extends HTMLElement{
             }
             else{
                 for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
-                    console.log("connecting ch: " + i + " to " + self.configuration[i]);
+                    console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + i % self.channels + ")");
                     if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
                     else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1 % self.channels], i);
                     else if(self.configuration[i] === 'LS') self.routeSplitter.connect(self.routes[2 % self.channels], i);
@@ -1696,7 +1709,6 @@ class multitrackPlayer extends HTMLElement{
         this.shadow.getElementById("ui").addEventListener('mousedown', function(e){
             var bound = this.getBoundingClientRect();
             var x = e.clientX - bound.left;
-            console.log(x)
             if(self.isPlaying) self.stop();
             self.clicking = true;
             self.xInterction = x;
