@@ -215,6 +215,20 @@ class multitrackPlayer extends HTMLElement{
         this.restartPoint = 0;
         this.autoscroll = false;
 
+        this.channelMapping = {};
+        this.channelMapping.L = this.getAttribute('channel_L').split(',');
+        this.channelMapping.R = this.getAttribute('channel_R').split(',');
+        this.channelMapping.C = this.getAttribute('channel_C').split(',');
+        this.channelMapping.LS = this.getAttribute('channel_LS').split(',');
+        this.channelMapping.RS = this.getAttribute('channel_RS').split(',');
+        this.channelMapping.M = this.getAttribute('channel_M').split(',');
+        this.channelMapping.S = this.getAttribute('channel_S').split(',');
+
+        for (let prop in this.channelMapping) {
+            for(var u = 0; u < this.channelMapping[prop].length; u++){
+                this.channelMapping[prop][u] = parseInt(this.channelMapping[prop][u]);
+            }
+        }
 
         this.externalJson = this.getAttribute('waveformJSON');
         this.region = {};
@@ -528,7 +542,45 @@ class multitrackPlayer extends HTMLElement{
             }
             else {
                 for(let i = 0; i < this.source.buffer.numberOfChannels; i++){
-                    this.splitLim.connect(this.mergeLim, i, i);
+                    //this.splitLim.connect(this.mergeLim, i, i);
+                    //connect each splitted channel to selected dummy gain node
+                    if(this.configuration[i] === 'L') {
+                        for(var u = 0; u < this.channelMapping.L.length; u++){
+                            console.log("connecting ch: " + i + " to " + this.configuration[i] + " (" + this.channelMapping.L[u] % this.channels + ")");
+                            this.splitLim.connect(this.mergeLim, i, this.channelMapping.L[u % this.channels]);
+                        }
+                    }
+                    else if(this.configuration[i] === 'R') {
+                        for(var u = 0; u < this.channelMapping.R.length; u++){
+                            console.log("connecting ch: " + i + " to " + this.configuration[i] + " (" + this.channelMapping.R[u] % this.channels + ")");
+                            this.splitLim.connect(this.mergeLim, i, this.channelMapping.R[u % this.channels]);
+                        }
+                    }
+                    else if(this.configuration[i] === 'LS') {
+                        for(var u = 0; u < this.channelMapping.LS.length; u++){
+                            console.log("connecting ch: " + i + " to " + this.configuration[i] + " (" + this.channelMapping.LS[u] % this.channels + ")");
+                            this.splitLim.connect(this.mergeLim, i, this.channelMapping.LS[u % this.channels]);
+                        }
+                    }
+                    else if(this.configuration[i] === 'RS') {
+                        for(var u = 0; u < this.channelMapping.RS.length; u++){
+                            console.log("connecting ch: " + i + " to " + this.configuration[i] + " (" + this.channelMapping.RS[u] % this.channels + ")");
+                            this.splitLim.connect(this.mergeLim, i, this.channelMapping.RS[u % this.channels]);
+                        }
+                    }
+                    else if(this.configuration[i] === 'LFE'){
+                        for(var u = 0; u < this.channelMapping.LFE.length; u++){
+                            console.log("connecting ch: " + i + " to " + this.configuration[i] + " (" + this.channelMapping.LFE[u] % this.channels + ")");
+                            this.splitLim.connect(this.mergeLim, i, this.channelMapping.LFE[u % this.channels]);
+                        }
+                        //subwoofer?
+                    }                    
+                    else if(this.configuration[i] === 'C'){
+                        for(var u = 0; u < this.channelMapping.C.length; u++){
+                            console.log("connecting ch: " + i + " to " + this.configuration[i] + " (" + this.channelMapping.C[u] % this.channels + ")");
+                            this.splitLim.connect(this.mergeLim, i, this.channelMapping.C[u % this.channels]);
+                        }
+                    }
                 }
             }
             this.mergeLim.connect(this.gain);
@@ -654,8 +706,8 @@ class multitrackPlayer extends HTMLElement{
         console.log("Detected active channels: " + this.audioContext.destination.channelCount + " / " + this.audioContext.destination.maxChannelCount);
         this.updateOutput();
         if(this._authorized == 'true'){        //If the user is authorized connect multichannel out
-            this.gain.connect(this.audioContext.destination);
-            //this.mergeLim.connect(this.audioContext.destination);
+            //this.gain.connect(this.audioContext.destination);
+            this.mergeLim.connect(this.audioContext.destination);
         } 
         else{                                   //If the user is not authorized merge to mono and connect to speakers
             this.monoMerge = this.audioContext.createChannelMerger(1);
@@ -811,8 +863,8 @@ class multitrackPlayer extends HTMLElement{
                         
                         self.routeSplitter.connect(self.mid, i);
 
-                        self.mid.connect(self.routes[0], i);
-                        self.mid.connect(self.routes[1 % self.channels], i);
+                        self.mid.connect(self.routes[this.channelMapping.M[0] % self.channels], i);
+                        self.mid.connect(self.routes[this.channelMapping.M[1] % self.channels], i);
                     }
                     else if(self.configuration[i] === 'S'){
 
@@ -832,11 +884,12 @@ class multitrackPlayer extends HTMLElement{
 
                         self.routeSplitter.connect(self.nonPhaseInversion, i);
                         self.nonPhaseInversion.connect(self.sides[0]);                         //attach non-phase inverted to sides
-                        self.sides[0].connect(self.routes[0]);                                 //attach side to left speaker
                         
                         self.routeSplitter.connect(self.phaseInversion, i);
                         self.phaseInversion.connect(self.sides[1]);                            //attach pahse inverted to sides
-                        self.sides[1].connect(self.routes[1 % self.channels]);                 //attach side to right speaker
+                        
+                        self.sides[0].connect(self.routes[this.channelMapping.S[0] % self.channels]);                 //attach side to left speaker
+                        self.sides[1].connect(self.routes[this.channelMapping.S[1] % self.channels]);                 //attach side to right speaker
                     }   
                  }
             }
@@ -852,25 +905,54 @@ class multitrackPlayer extends HTMLElement{
                         self.routeSplitter.connect(self.gainL, i);
                         self.routeSplitter.connect(self.gainR, i);
 
-                        self.gainL.connect(self.routes[0], i);
-                        self.gainR.connect(self.routes[1 % self.channels], i);
+                        for(var u = 0; u < this.channelMapping.L.length; u++){
+                            self.gainL.connect(self.routes[this.channelMapping.L[u] % self.channels] , i);
+                        }
+                        for(var u = 0; u < this.channelMapping.R.length; u++){
+                            self.gainR.connect(self.routes[this.channelMapping.R[u] % self.channels] , i);
+                        }
                     }             
                 }
             }
             else{
                 for(var i = 0; i < buffer.numberOfChannels; i++){                                  //connect each splitted channel to selected dummy gain node
-                    console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + i % self.channels + ")");
-                    if(self.configuration[i] === 'L') self.routeSplitter.connect(self.routes[0], i);
-                    else if(self.configuration[i] === 'R') self.routeSplitter.connect(self.routes[1 % self.channels], i);
-                    else if(self.configuration[i] === 'LS') self.routeSplitter.connect(self.routes[2 % self.channels], i);
-                    else if(self.configuration[i] === 'RS') self.routeSplitter.connect(self.routes[3 % self.channels], i);
-                    else if(self.configuration[i] === 'C' || self.configuration[i] === 'M'){
-                        self.routeSplitter.connect(self.routes[0], i);
-                        self.routeSplitter.connect(self.routes[1 % self.channels], i);
+                    if(self.configuration[i] === 'L') {
+                        for(var u = 0; u < this.channelMapping.L.length; u++){
+                            self.routeSplitter.connect(self.routes[this.channelMapping.L[u] % self.channels], i);
+                            console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + this.channelMapping.L[u] % self.channels + ")");
+                        }
+                    }
+                    else if(self.configuration[i] === 'R') {
+                        for(var u = 0; u < this.channelMapping.R.length; u++){
+                            self.routeSplitter.connect(self.routes[this.channelMapping.R[u] % self.channels], i);
+                            console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + this.channelMapping.R[u] % self.channels + ")");
+                        }
+                    }
+                    else if(self.configuration[i] === 'LS') {
+                        for(var u = 0; u < this.channelMapping.LS.length; u++){
+                            self.routeSplitter.connect(self.routes[this.channelMapping.LS[u] % self.channels], i);
+                            console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + this.channelMapping.LS[u] % self.channels + ")");
+                        }
+                    }
+                    else if(self.configuration[i] === 'RS') {
+                        for(var u = 0; u < this.channelMapping.RS.length; u++){
+                            self.routeSplitter.connect(self.routes[this.channelMapping.RS[u] % self.channels], i);
+                            console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + this.channelMapping.RS[u] % self.channels + ")");
+                        }
                     }
                     else if(self.configuration[i] === 'LFE'){
+                        for(var u = 0; u < this.channelMapping.LFE.length; u++){
+                            self.routeSplitter.connect(self.routes[this.channelMapping.LFE[u] % self.channels], i);
+                            console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + this.channelMapping.LFE[u] % self.channels + ")");
+                        }
                         //subwoofer?
                     }                    
+                    else if(self.configuration[i] === 'C'){
+                        for(var u = 0; u < this.channelMapping.C.length; u++){
+                            self.routeSplitter.connect(self.routes[this.channelMapping.C[u] % self.channels], i);
+                            console.log("connecting ch: " + i + " to " + self.configuration[i] + " (" + this.channelMapping.C[u] % self.channels + ")");
+                        }
+                    }
                 }
             }
             for(var i = 0; i < self.channels; i++){
