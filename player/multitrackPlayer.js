@@ -1061,10 +1061,12 @@ class multitrackPlayer extends HTMLElement{
             else self.canvas.track[c].wave.fillStyle = 'rgb(' + self.colors.tracks[c].unmuted[0] + ',' + self.colors.tracks[c].unmuted[1] + ',' + self.colors.tracks[c].unmuted[2]  + ')';
             let height = self.canvas.waveHeight / (data.length * 2);
             for(var i = 0; i < self.canvas.waveWidth; i++){
-                let minPixel = data[c][i][0] * height + height;
-                let maxPixel = data[c][i][1] * height + height;
-                let pixelHeight = maxPixel - minPixel;
-                self.canvas.track[c].wave.fillRect(i, minPixel, 1, pixelHeight);
+                if(data[c][i]){
+                    let minPixel = data[c][i][0] * height + height;
+                    let maxPixel = data[c][i][1] * height + height;
+                    let pixelHeight = maxPixel - minPixel;
+                    self.canvas.track[c].wave.fillRect(i, minPixel, 1, pixelHeight);
+                }
             }
         }
     }
