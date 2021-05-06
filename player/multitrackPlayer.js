@@ -655,7 +655,7 @@ class multitrackPlayer extends HTMLElement{
         this.updateOutput();
         if(this._authorized == 'true'){        //If the user is authorized connect multichannel out
             this.gain.connect(this.audioContext.destination);
-            this.mergeLim.connect(this.audioContext.destination);
+            //this.mergeLim.connect(this.audioContext.destination);
         } 
         else{                                   //If the user is not authorized merge to mono and connect to speakers
             this.monoMerge = this.audioContext.createChannelMerger(1);
