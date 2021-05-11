@@ -687,9 +687,9 @@ class multitrackPlayer extends HTMLElement{
        
         this.region.startSample = 0;
         this.region.endSample = this.totalSamples;
-        this.shadow.getElementById("region-start").innerHTML = this.region.startSample;
-        this.shadow.getElementById("region-end").innerHTML = this.region.endSample;
-        this.shadow.getElementById("region-duration").innerHTML = this.region.endSample - this.region.startSample;
+        this.shadow.getElementById("region-start").innerHTML = this.source.loopStart;
+        this.shadow.getElementById("region-end").innerHTML = this.source.loopEnd;
+        this.shadow.getElementById("region-duration").innerHTML = this.region.loopStart - this.region.loopEnd;
         this.shadow.getElementById("active-channels").innerHTML = this.audioContext.destination.channelCount;
   
         
