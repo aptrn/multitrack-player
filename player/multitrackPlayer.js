@@ -223,6 +223,7 @@ class multitrackPlayer extends HTMLElement{
         this.channelMapping.RS = this.getAttribute('channel_RS').split(',');
         this.channelMapping.M = this.getAttribute('channel_M').split(',');
         this.channelMapping.S = this.getAttribute('channel_S').split(',');
+        this.channelMapping.LFE = this.getAttribute('channel_LFE').split(',');
 
         for (let prop in this.channelMapping) {
             for(var u = 0; u < this.channelMapping[prop].length; u++){
@@ -706,8 +707,8 @@ class multitrackPlayer extends HTMLElement{
         console.log("Detected active channels: " + this.audioContext.destination.channelCount + " / " + this.audioContext.destination.maxChannelCount);
         this.updateOutput();
         if(this._authorized == 'true'){        //If the user is authorized connect multichannel out
-            //this.gain.connect(this.audioContext.destination);
-            this.mergeLim.connect(this.audioContext.destination);
+            this.gain.connect(this.audioContext.destination);
+            //this.mergeLim.connect(this.audioContext.destination);
         } 
         else{                                   //If the user is not authorized merge to mono and connect to speakers
             this.monoMerge = this.audioContext.createChannelMerger(1);
@@ -1403,9 +1404,9 @@ class multitrackPlayer extends HTMLElement{
         this.restartPoint = this.region.startSample;
 
 
-        this.shadow.getElementById("region-start").innerHTML = this.region.startSample;
-        this.shadow.getElementById("region-end").innerHTML = this.region.endSample;
-        this.shadow.getElementById("region-duration").innerHTML = this.region.endSample - this.region.startSample;
+        this.shadow.getElementById("region-start").innerHTML = this.source.loopStart;
+        this.shadow.getElementById("region-end").innerHTML = this.source.loopEnd;
+        this.shadow.getElementById("region-duration").innerHTML = this.source.loopEnd - this.source.loopStart;
    }
 
     //playPos in samples
