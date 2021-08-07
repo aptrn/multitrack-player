@@ -122,6 +122,19 @@ template.innerHTML =
         <p id="region-start">0</p>
         <p id="region-end">0</p>
         <p id="region-duration">0</p>
+        <div id="output-parameters">
+            <p>params</p>
+            <p id="out_pre-gain">0</p>
+            <p id="out_comp_enabled">0</p>
+            <p id="out_comp_ratio">0</p>
+            <p id="out_comp_threshold">0</p>
+            <p id="out_comp_attack">0</p>
+            <p id="out_comp_release">0</p>
+            <p id="out_lim_enabled">0</p>
+            <p id="out_lim_threshold">0</p>
+            <p id="out_lim_attack">0</p>
+            <p id="out_lim_release">0</p>
+        </div>
     </div>
 </div>
 </html>
@@ -245,6 +258,7 @@ class multitrackPlayer extends HTMLElement{
         this.colors.waveform = this.getAttribute('waveformRGB').split(',');
         this.colors.waveformBackground = this.getAttribute('waveformBackground').split(',');
         this.colors.analyzer = this.getAttribute('analyzerRGB').split(',');
+        this.colors.analyzerMax = this.getAttribute('analyzerMaxRGB').split(',');
         this.colors.analyzerBackground = this.getAttribute('analyzerBackground').split(',');
         this.colors.analyserStyle = this.getAttribute('analyzerStyle');
         this.colors.analyserSize = this.getAttribute('analyzerFFTSize');
@@ -470,7 +484,7 @@ class multitrackPlayer extends HTMLElement{
 
    
     updateChannels(){                                                                //Update channel count for audio nodes
-        console.log("def chan count: " + this.audioContext.destination.channelCount);
+        //console.log("def chan count: " + this.audioContext.destination.channelCount);
         this.source.channelCount = this.audioContext.destination.channelCount;
         for(let e = 0; e < this.eq.length; e++) this.eq[e].channelCount = this.audioContext.destination.channelCount;
         this.gain.channelCount = this.audioContext.destination.channelCount;
@@ -689,9 +703,28 @@ class multitrackPlayer extends HTMLElement{
         this.region.endSample = this.totalSamples;
         this.shadow.getElementById("region-start").innerHTML = this.source.loopStart;
         this.shadow.getElementById("region-end").innerHTML = this.source.loopEnd;
-        this.shadow.getElementById("region-duration").innerHTML = this.region.loopStart - this.region.loopEnd;
+        this.shadow.getElementById("region-duration").innerHTML = parseFloat(this.source.loopEnd - this.source.loopStart);
         this.shadow.getElementById("active-channels").innerHTML = this.audioContext.destination.channelCount;
   
+
+        this.shadow.getElementById("out_comp_enabled").innerHTML = this.compressore.enabled;
+        this.shadow.getElementById("out_comp_ratio").innerHTML = this.compressore.ratio;
+        this.shadow.getElementById("out_comp_threshold").innerHTML = this.compressore.threshold;
+        this.shadow.getElementById("out_comp_attack").innerHTML = this.compressore.attack;
+        this.shadow.getElementById("out_comp_release").innerHTML = this.compressore.release;
+        this.shadow.getElementById("out_lim_enabled").innerHTML = this.limiterParameters.enabled;
+        this.shadow.getElementById("out_lim_threshold").innerHTML = this.limiterParameters.threshold;
+        this.shadow.getElementById("out_lim_attack").innerHTML = this.limiterParameters.attack;
+        this.shadow.getElementById("out_lim_release").innerHTML = this.limiterParameters.release;
+        this.shadow.getElementById("out_pre-gain").innerHTML = this.preGain;
+
+
+
+
+
+
+
+
         
         this.canvas.analyserWidth += this.shadow.getElementById('muteLabel_' + 0).scrollWidth;
         //console.log(this.canvas.analyserWidth + "/" + (this.canvas.waveWidth + this.canvas.meterWidth + this.shadow.getElementById('muteLabel_' + 0).scrollWidth));
@@ -1343,8 +1376,6 @@ class multitrackPlayer extends HTMLElement{
 
             //FREQ ANALYSER
 
-            
-            
             var freqData = new Uint8Array(this.analyser.frequencyBinCount);
             this.analyser.getByteFrequencyData(freqData);      
             var scaling = this.canvas.analyserHeight / 256;
@@ -1356,13 +1387,16 @@ class multitrackPlayer extends HTMLElement{
             this.canvas.analyser.fillStyle =  'rgb(' + this.colors.analyzerBackground[0] + ',' + this.colors.analyzerBackground[1] + ',' + this.colors.analyzerBackground[2]  + ')';
             this.canvas.analyser.fillRect(0, 0, this.canvas.analyserWidth, this.canvas.analyserHeight);
             
-            this.canvas.analyser.strokeStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
-            this.canvas.analyser.fillStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
+            //this.canvas.analyser.strokeStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
+            //this.canvas.analyser.fillStyle = 'rgb(' + this.colors.analyzer[0] + ',' + this.colors.analyzer[1] + ',' + this.colors.analyzer[2]  + ')';
+
             
             if (this.colors.analyserStyle == "bars"){
                 for (var x = 0; x < this.canvas.analyserWidth; x++){
                     xPos = x * space;
                     var barHeight = freqData[x] * scaling;
+                    let perc = 1.0 - (xPos / this.canvas.analyserWidth);
+                    this.canvas.analyser.fillStyle = 'rgb(' + ((perc * this.colors.analyzer[0]) + ((1.0 - perc) * this.colors.analyzerMax[0])) + ',' + ((perc * this.colors.analyzer[1]) + ((1.0 - perc ) * this.colors.analyzerMax[1])) + ',' + ((perc * this.colors.analyzer[2]) + ((1.0 - perc ) * this.colors.analyzerMax[2])) + ')';
                     this.canvas.analyser.fillRect(xPos, this.canvas.analyserHeight - barHeight, space, barHeight);
                 }
             }
@@ -1875,6 +1909,32 @@ class multitrackPlayer extends HTMLElement{
         
         self.shadow.getElementById("box-np-main").style.opacity = 1;
     }
+
+    static rgbToHsl(r, g, b) {
+        r /= 255, g /= 255, b /= 255;
+        
+        var max = Math.max(r, g, b), min = Math.min(r, g, b);
+        var h, s, l = (max + min) / 2;
+        
+        if (max == min) {
+            h = s = 0; // achromatic
+        } else {
+            var d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        
+            switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+            }
+        
+            h /= 6;
+        }
+        
+        return [ h, s, l ];
+    }
+
+
     static eventFire(el, etype){
         if (el.fireEvent) {
           el.fireEvent('on' + etype);
