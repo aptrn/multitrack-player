@@ -227,6 +227,7 @@ class multitrackPlayer extends HTMLElement{
         this.isPlaying = false;
         this.restartPoint = 0;
         this.autoscroll = false;
+        this.wasPlaying = false;
 
         this.channelMapping = {};
         this.channelMapping.L = this.getAttribute('channel_L').split(',');
@@ -1459,13 +1460,23 @@ class multitrackPlayer extends HTMLElement{
         else if (playPos >= self.region.endSample) self.source.start(self.audioContext.currentTime, self.sampleToSeconds(playPos), self.sampleToSeconds(self.totalSamples) - self.sampleToSeconds(playPos));
         else if (playPos < self.region.startSample) self.source.start(self.audioContext.currentTime, self.sampleToSeconds(playPos), self.sampleToSeconds(self.region.endSample) - self.sampleToSeconds(playPos));
         self.source.addEventListener('ended', () => {
+            console.log("ended");
             if(self.paused){
                 self.paused = false;
             }
+            else if (self.wasPlaying){
+                //dont do stufff
+            }
             else self.restartPoint = self.region.startSample;
+
+
             if(self.loop){
                 self.stop();
                 self.mettiPlay(self.region.startSample);
+            }
+            else if (self.wasPlaying == true){
+                self.wasPlaying = false;
+                self.mettiPlay(self.restartPoint);
             }
             else if(!self.loop){
                 self.stop();
@@ -1828,9 +1839,14 @@ class multitrackPlayer extends HTMLElement{
         this.shadow.getElementById("ui").addEventListener('mousedown', function(e){
             var bound = this.getBoundingClientRect();
             var x = e.clientX - bound.left;
-            if(self.isPlaying) self.stop();
+         
             self.clicking = true;
-            self.xInterction = x;
+            self.xInteraction = x; 
+            if(self.isPlaying){
+                self.restartPoint = self.pxToSample(self.xInteraction);
+                self.stop();
+                self.wasPlaying = true;
+            } 
             //self.restartPoint = self.playHeadSamples;
 
             let startPx = self.sampleToPx(self.region.startSample);
@@ -1864,6 +1880,7 @@ class multitrackPlayer extends HTMLElement{
         this.shadow.getElementById("box-np-main").addEventListener('mousemove', function(e){
             if(self.clicking == true){
                 self.interaction = true;
+                self.wasPlaying = false;
                 var bound = this.getBoundingClientRect();
                 var uiBound = self.shadow.getElementById("ui").getBoundingClientRect();
                 var x = e.clientX - uiBound.left;     
@@ -1871,7 +1888,6 @@ class multitrackPlayer extends HTMLElement{
                     //console.log("move start");
                     self.updateBounds(multitrackPlayer.clamp(self.pxToSample(x), 0, self.region.endSample - (self.samplesMaxZoom * 0.05)), self.region.endSample);
                 }
-                
                 else if (self.moveEnd){
                     //console.log("move end")
                     self.updateBounds(self.region.startSample, multitrackPlayer.clamp(self.pxToSample(x), self.region.startSample + (self.samplesMaxZoom * 0.05), self.totalSamples));
@@ -1891,11 +1907,11 @@ class multitrackPlayer extends HTMLElement{
                     } 
                 }
                 else{
-                    self.restartPoint = self.pxToSample(self.xInterction);
+                    self.restartPoint = self.pxToSample(self.xInteraction);
                 }
                 self.clicking = false;
                 self.interaction = false;
-                self.xInterction = null;
+                self.xInteraction = null;
 
                 self.moveStart = false;
                 self.moveEnd = false; 
@@ -1903,6 +1919,8 @@ class multitrackPlayer extends HTMLElement{
             }
             //console.log("restartPoint: " + self.restartPoint);
         })
+
+     
 
         document.addEventListener('keyup', multitrackPlayer.shortcutHandler, false);
    
